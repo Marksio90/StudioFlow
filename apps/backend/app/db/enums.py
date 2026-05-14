@@ -9,6 +9,8 @@ class VideoProjectStatus(str, Enum):
     compliance_checking = "compliance_checking"
     awaiting_review = "awaiting_review"
     approved = "approved"
+    rejected = "rejected"
+    needs_changes = "needs_changes"
     scheduled = "scheduled"
     published = "published"
     analytics_pending = "analytics_pending"
@@ -25,6 +27,7 @@ class ComplianceRiskLevel(str, Enum):
 
 
 class ApprovalStatus(str, Enum):
-    pending = "pending"
+    awaiting_review = "awaiting_review"
     approved = "approved"
     rejected = "rejected"
+    needs_changes = "needs_changes"

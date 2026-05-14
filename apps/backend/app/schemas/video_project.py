@@ -72,3 +72,17 @@ class ComplianceReportOut(BaseModel):
     reasons: list[str]
     recommendations: list[str]
     blocking_issues: list[str]
+
+
+class ApprovalDecisionIn(BaseModel):
+    comment: str | None = None
+    decided_by_user_id: UUID
+
+
+class ApprovalDecisionOut(BaseModel):
+    id: UUID
+    video_project_id: UUID
+    status: str
+    comment: str | None = None
+    decided_by_user_id: UUID
+    created_at: datetime

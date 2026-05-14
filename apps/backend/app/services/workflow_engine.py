@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.db.enums import VideoProjectStatus
+from app.db.enums import ApprovalStatus, VideoProjectStatus
 from app.services.compliance_service import ComplianceService
 from app.services.workflow_events import WorkflowEventEmitter
 
@@ -45,18 +45,27 @@ class WorkflowEngine:
                 break
         return run
 
-    def approve(self, video_project_id):
+    def approve(self, video_project_id, comment: str | None, decided_by_user_id):
         run = self.repo.get_latest_workflow_run(video_project_id)
         report = self.repo.get_compliance(video_project_id)
         if report.get("risk_level") == "blocked" or report.get("blocking_issues"):
             self.events.emit(video_project_id, run["id"], "workflow.approval_blocked", {"blocking_issues": report.get("blocking_issues", [])})
             return {"status": "blocked", "blocking_issues": report.get("blocking_issues", [])}
+        self.repo.add_approval_decision(video_project_id, ApprovalStatus.approved, comment, decided_by_user_id)
         self.repo.update_project_status(video_project_id, VideoProjectStatus.approved)
-        self.events.emit(video_project_id, run["id"], "workflow.approved", {})
+        self.events.emit(video_project_id, run["id"], "workflow.approved", {"decided_by_user_id": str(decided_by_user_id)})
         return {"status": "approved"}
 
-    def reject(self, video_project_id):
+    def reject(self, video_project_id, comment: str | None, decided_by_user_id):
         run = self.repo.get_latest_workflow_run(video_project_id)
-        self.repo.update_project_status(video_project_id, VideoProjectStatus.failed)
-        self.events.emit(video_project_id, run["id"], "workflow.rejected", {"state": "needs_changes"})
+        self.repo.add_approval_decision(video_project_id, ApprovalStatus.rejected, comment, decided_by_user_id)
+        self.repo.update_project_status(video_project_id, VideoProjectStatus.rejected)
+        self.events.emit(video_project_id, run["id"], "workflow.rejected", {"decided_by_user_id": str(decided_by_user_id)})
+        return {"status": "rejected"}
+
+    def needs_changes(self, video_project_id, comment: str | None, decided_by_user_id):
+        run = self.repo.get_latest_workflow_run(video_project_id)
+        self.repo.add_approval_decision(video_project_id, ApprovalStatus.needs_changes, comment, decided_by_user_id)
+        self.repo.update_project_status(video_project_id, VideoProjectStatus.needs_changes)
+        self.events.emit(video_project_id, run["id"], "workflow.needs_changes", {"decided_by_user_id": str(decided_by_user_id)})
         return {"status": "needs_changes"}

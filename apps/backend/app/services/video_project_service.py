@@ -1,9 +1,11 @@
 from uuid import UUID
 
-from app.db.enums import VideoProjectStatus
+from app.db.enums import ApprovalStatus, VideoProjectStatus
 from app.schemas.video_project import VideoProjectCreate, VideoProjectUpdate
 from app.services.compliance_service import ComplianceInput, ComplianceService
 from app.services.workflow_engine import WorkflowEngine
+
+SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 
 class VideoProjectService:
@@ -31,16 +33,23 @@ class VideoProjectService:
         return self.engine.start(project_id)
 
     def request_approval(self, project_id: UUID):
+        self.repo.add_approval_decision(project_id, status=ApprovalStatus.awaiting_review, comment="Approval requested", decided_by_user_id=SYSTEM_USER_ID)
         return self.repo.update(project_id, {"status": VideoProjectStatus.awaiting_review})
 
-    def approve(self, project_id: UUID):
-        return self.engine.approve(project_id)
+    def approve(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        return self.engine.approve(project_id, comment, decided_by_user_id)
 
-    def reject(self, project_id: UUID):
-        return self.engine.reject(project_id)
+    def reject(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        return self.engine.reject(project_id, comment, decided_by_user_id)
+
+    def needs_changes(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        return self.engine.needs_changes(project_id, comment, decided_by_user_id)
 
     def get_events(self, project_id: UUID):
         return self.repo.get_events(project_id)
+
+    def get_approval_decisions(self, project_id: UUID):
+        return self.repo.get_approval_decisions(project_id)
 
     def get_costs(self, project_id: UUID):
         return self.repo.get_costs(project_id)

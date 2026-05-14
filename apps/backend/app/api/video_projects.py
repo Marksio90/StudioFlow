@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Response
 from app.api.deps import get_correlation_id, get_video_project_service
 from app.api.errors import structured_error
 from app.db.enums import VideoProjectStatus
-from app.schemas.video_project import ComplianceReportOut, PaginatedVideoProjects, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
+from app.schemas.video_project import ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
 from app.services.video_project_service import VideoProjectService
 
 router = APIRouter(prefix="/api/v1/video-projects", tags=["video-projects"])
@@ -60,15 +60,27 @@ def request_approval(project_id: UUID, service: VideoProjectService = Depends(ge
 
 
 @router.post("/{project_id}/approve")
-def approve(project_id: UUID, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+def approve(project_id: UUID, payload: ApprovalDecisionIn, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
     _require_project(service, project_id, correlation_id)
-    return service.approve(project_id)
+    return service.approve(project_id, payload.comment, payload.decided_by_user_id)
 
 
 @router.post("/{project_id}/reject")
-def reject(project_id: UUID, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+def reject(project_id: UUID, payload: ApprovalDecisionIn, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
     _require_project(service, project_id, correlation_id)
-    return service.reject(project_id)
+    return service.reject(project_id, payload.comment, payload.decided_by_user_id)
+
+
+@router.post("/{project_id}/needs-changes")
+def needs_changes(project_id: UUID, payload: ApprovalDecisionIn, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+    _require_project(service, project_id, correlation_id)
+    return service.needs_changes(project_id, payload.comment, payload.decided_by_user_id)
+
+
+@router.get("/{project_id}/approval-decisions", response_model=list[ApprovalDecisionOut])
+def approval_decisions(project_id: UUID, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+    _require_project(service, project_id, correlation_id)
+    return service.get_approval_decisions(project_id)
 
 
 @router.get("/{project_id}/events", response_model=list[WorkflowEventOut])
