@@ -1,13 +1,8 @@
-export type ProjectStatus =
-  | 'draft'
-  | 'researching'
-  | 'scripting'
-  | 'awaiting_review'
-  | 'approved'
-  | 'rejected'
-  | 'published';
+import type { components } from '../../../packages/shared/src/backend-api';
 
-export type RiskLevel = 'low' | 'medium' | 'high';
+export type ProjectStatus = components['schemas']['VideoProjectStatus'];
+
+export type RiskLevel = components['schemas']['ComplianceRiskLevel'];
 
 export interface ComplianceReport {
   score: number;
