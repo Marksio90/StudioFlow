@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
-from app.db.models import ApprovalDecision, AnalyticsSnapshot, Channel, ComplianceReport, LLMCostLedgerEntry, Membership, Organization, PublishingPlan, VideoProject, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
+from app.db.models import ApprovalDecision, AnalyticsSnapshot, Channel, ComplianceReport, LLMCostLedgerEntry, Membership, Organization, PublishingPlan, TaskAttempt, TaskExecution, VideoProject, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
 
 
 class DBVideoProjectRepository:
@@ -64,8 +64,24 @@ class DBVideoProjectRepository:
         run = await self.get_latest_workflow_run(video_project_id)
         workflow_run_id = run["id"] if run else None
         if workflow_run_id:
-            self.session.add(WorkflowEvent(workflow_run_id=workflow_run_id, event_type=event["event_type"], payload=event["payload"]))
+            self.session.add(WorkflowEvent(workflow_run_id=workflow_run_id, correlation_id=event.get("correlation_id"), event_type=event["event_type"], payload=event["payload"]))
             await self.session.commit()
+    async def get_or_create_task_execution(self, task_name: str, business_key: str, idempotency_key: str, workflow_run_id: UUID | None = None):
+        existing = (await self.session.scalars(select(TaskExecution).where(TaskExecution.business_key == business_key))).first()
+        if existing:
+            return existing
+        row = TaskExecution(workflow_run_id=workflow_run_id, task_name=task_name, business_key=business_key, idempotency_key=idempotency_key, status="pending", retry_count=0)
+        self.session.add(row); await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
+        return row
+    async def mark_task_execution(self, execution_id: UUID, status: str, retry_count: int, error_code: str | None = None):
+        row = await self.session.get(TaskExecution, execution_id)
+        row.status = status; row.retry_count = retry_count; row.error_code = error_code
+        await self.session.commit(); await self.session.refresh(row)
+        return row
+    async def add_task_attempt(self, execution_id: UUID, attempt_no: int, status: str, error_code: str | None = None):
+        row = TaskAttempt(task_execution_id=execution_id, attempt_no=attempt_no, status=status, error_code=error_code)
+        self.session.add(row); await self.session.commit()
+        return row
     async def get_events(self, project_id: UUID):
         stmt = (
             select(WorkflowEvent)
