@@ -1,9 +1,9 @@
 from uuid import uuid4
 import os
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.deps import get_db_session
@@ -34,9 +34,28 @@ def create_payload():
     return {"organization_id": str(uuid4()), "workspace_id": str(uuid4()), "channel_id": str(uuid4()), "title": "My Project"}
 
 
+def _create_project(client: TestClient):
+    res = client.post('/api/v1/video-projects', json=create_payload(), headers={"X-API-Key": "editor-key"})
+    assert res.status_code == 201, res.text
+    return res.json()
+
+
+def _create_plan(client: TestClient, project: dict):
+    res = client.post('/api/v1/video-projects/publishing-plans', json={
+        "video_project_id": project["id"],
+        "channel_id": project["channel_id"],
+        "title": "Plan title",
+        "description": "Desc",
+        "tags": ["a"],
+        "visibility": "private",
+    }, headers={"X-API-Key": "editor-key"})
+    assert res.status_code == 201, res.text
+    return res.json()
+
+
 def test_create_and_get_project(client: TestClient):
     created = client.post('/api/v1/video-projects', json=create_payload(), headers={"X-API-Key": "editor-key"})
-    assert created.status_code in {201, 500}
+    assert created.status_code == 201
 
 
 def test_mutating_route_requires_auth(client: TestClient):
@@ -55,3 +74,41 @@ def test_rate_limit_returns_429(client: TestClient):
         last = client.get('/health')
     assert last is not None
     assert last.status_code == 429
+
+
+def test_publish_flow_success(client: TestClient):
+    project = _create_project(client)
+    project_id = project["id"]
+
+    req = client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers={"X-API-Key": "editor-key"})
+    assert req.status_code == 200
+
+    approve = client.post(f'/api/v1/video-projects/{project_id}/approve', json={"comment": "ok", "decided_by_user_id": str(uuid4())}, headers={"X-API-Key": "editor-key"})
+    assert approve.status_code == 200
+
+    compliance = client.post(f'/api/v1/video-projects/{project_id}/compliance', json={"metadata": {}, "disclosure_decision_missing": False}, headers={"X-API-Key": "editor-key"})
+    assert compliance.status_code == 200
+
+    plan = _create_plan(client, project)
+    plan_id = plan["id"]
+
+    schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers={"X-API-Key": "editor-key"})
+    assert schedule.status_code == 200, schedule.text
+    assert schedule.json()["status"] == "scheduled"
+
+    publish = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/publish', headers={"X-API-Key": "editor-key"})
+    assert publish.status_code == 200, publish.text
+    assert publish.json()["status"] == "published"
+
+
+def test_publish_flow_blocked(client: TestClient):
+    project = _create_project(client)
+    project_id = project["id"]
+
+    client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers={"X-API-Key": "editor-key"})
+    reject = client.post(f'/api/v1/video-projects/{project_id}/reject', json={"comment": "no", "decided_by_user_id": str(uuid4())}, headers={"X-API-Key": "editor-key"})
+    assert reject.status_code == 200
+
+    plan = _create_plan(client, project)
+    schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan["id"]}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers={"X-API-Key": "editor-key"})
+    assert schedule.status_code == 409
