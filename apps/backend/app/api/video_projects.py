@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Response
 from app.api.deps import get_correlation_id, get_video_project_service
 from app.api.errors import structured_error
 from app.db.enums import VideoProjectStatus
-from app.schemas.video_project import ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
+from app.schemas.video_project import AnalyticsSnapshotIn, AnalyticsSnapshotOut, ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
 from app.services.video_project_service import VideoProjectService
 
 router = APIRouter(prefix="/api/v1/video-projects", tags=["video-projects"])
@@ -117,7 +117,13 @@ def compliance(project_id: UUID, service: VideoProjectService = Depends(get_vide
     return service.get_compliance(project_id)
 
 
-@router.get("/{project_id}/analytics")
+@router.get("/{project_id}/analytics", response_model=list[AnalyticsSnapshotOut])
 def analytics(project_id: UUID, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
     _require_project(service, project_id, correlation_id)
     return service.get_analytics(project_id)
+
+
+@router.post("/{project_id}/analytics", response_model=AnalyticsSnapshotOut, status_code=201)
+def create_analytics_snapshot(project_id: UUID, payload: AnalyticsSnapshotIn, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+    _require_project(service, project_id, correlation_id)
+    return service.create_analytics_snapshot(project_id, payload.model_dump())

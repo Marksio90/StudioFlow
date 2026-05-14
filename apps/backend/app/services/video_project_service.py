@@ -2,6 +2,7 @@ from uuid import UUID
 
 from app.db.enums import ApprovalStatus, VideoProjectStatus
 from app.schemas.video_project import VideoProjectCreate, VideoProjectUpdate
+from app.services.analytics_service import AnalyticsService
 from app.services.compliance_service import ComplianceInput, ComplianceService
 from app.services.workflow_engine import WorkflowEngine
 
@@ -13,6 +14,7 @@ class VideoProjectService:
         self.repo = repo
         self.engine = WorkflowEngine(repo)
         self.compliance_service = ComplianceService()
+        self.analytics_service = AnalyticsService(repo)
 
     def list_projects(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         return self.repo.list(limit=limit, offset=offset, status=status, channel_id=channel_id, workspace_id=workspace_id)
@@ -71,4 +73,7 @@ class VideoProjectService:
         return self.repo.save_compliance_report(project_id, report.model_dump())
 
     def get_analytics(self, project_id: UUID):
-        return self.repo.get_analytics(project_id)
+        return self.analytics_service.list_project_analytics(project_id)
+
+    def create_analytics_snapshot(self, project_id: UUID, payload: dict):
+        return self.analytics_service.save_snapshot(project_id, payload)

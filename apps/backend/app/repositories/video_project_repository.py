@@ -15,6 +15,7 @@ class InMemoryVideoProjectRepository:
         self.llm_cost_ledger_entries: dict[UUID, list[dict]] = {}
         self.youtube_quota_ledger_entries: list[dict] = []
         self.approval_decisions: dict[UUID, list[dict]] = {}
+        self.analytics_snapshots: dict[UUID, list[dict]] = {}
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -131,8 +132,14 @@ class InMemoryVideoProjectRepository:
         self.compliance_reports[project_id] = report
         return report
 
+    def create_analytics_snapshot(self, payload: dict):
+        now = datetime.now(timezone.utc)
+        row = {"id": uuid4(), **payload, "created_at": now, "updated_at": now}
+        self.analytics_snapshots.setdefault(payload["video_project_id"], []).append(row)
+        return row
+
     def get_analytics(self, project_id: UUID):
-        return {"video_project_id": project_id, "views": 0, "watch_time": 0}
+        return self.analytics_snapshots.get(project_id, [])
 
     def add_approval_decision(self, project_id: UUID, status: ApprovalStatus, comment: str | None, decided_by_user_id: UUID):
         decision = {

@@ -1,4 +1,4 @@
-import { CreateProjectInput, VideoProject, ProjectStatus } from './types';
+import { AnalyticsSnapshot, CreateProjectInput, VideoProject, ProjectStatus } from './types';
 
 const STORAGE_KEY = 'studioflow_projects_v1';
 
@@ -89,6 +89,25 @@ export const apiClient = {
     const next = [project, ...projects];
     setProjects(next);
     return project;
+  },
+  async listAnalytics(id: string): Promise<AnalyticsSnapshot[]> {
+    await wait();
+    const p = await this.getProject(id);
+    return [{
+      id: `a_${id}`,
+      video_project_id: id,
+      channel_id: p.channel,
+      youtube_video_id: `yt_${id}`,
+      views: p.analytics.projectedViews,
+      watch_time_minutes: 1200,
+      average_view_duration: 145,
+      ctr: p.analytics.estimatedCtr,
+      likes: 100,
+      comments: 12,
+      subscribers_gained: 8,
+      estimated_revenue: 75.5,
+      snapshot_at: new Date().toISOString()
+    }];
   },
   async setApproval(id: string, approve: boolean, note?: string) {
     await wait();

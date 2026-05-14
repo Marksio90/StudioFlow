@@ -86,3 +86,24 @@ class ApprovalDecisionOut(BaseModel):
     comment: str | None = None
     decided_by_user_id: UUID
     created_at: datetime
+
+
+class AnalyticsSnapshotIn(BaseModel):
+    channel_id: UUID
+    youtube_video_id: str
+    views: int
+    watch_time_minutes: float
+    average_view_duration: float
+    ctr: float
+    likes: int
+    comments: int
+    subscribers_gained: int
+    estimated_revenue: float
+    snapshot_at: datetime
+
+
+class AnalyticsSnapshotOut(AnalyticsSnapshotIn):
+    id: UUID
+    video_project_id: UUID
+    created_at: datetime
+    updated_at: datetime
