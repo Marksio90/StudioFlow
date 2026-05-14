@@ -172,3 +172,30 @@ def test_needs_changes_and_decision_history_available():
     assert history.status_code == 200
     assert len(history.json()) == 1
     assert history.json()[0]['comment'] == 'update intro'
+
+def test_analytics_snapshot_create_and_list():
+    payload = create_payload()
+    created = client.post('/api/v1/video-projects', json=payload)
+    pid = created.json()['id']
+
+    snap_payload = {
+        "channel_id": payload["channel_id"],
+        "youtube_video_id": "yt_123",
+        "views": 1234,
+        "watch_time_minutes": 456.7,
+        "average_view_duration": 89.1,
+        "ctr": 4.2,
+        "likes": 111,
+        "comments": 22,
+        "subscribers_gained": 9,
+        "estimated_revenue": 12.34,
+        "snapshot_at": "2026-05-14T10:00:00Z",
+    }
+    saved = client.post(f'/api/v1/video-projects/{pid}/analytics', json=snap_payload)
+    assert saved.status_code == 201
+    assert saved.json()['youtube_video_id'] == 'yt_123'
+
+    rows = client.get(f'/api/v1/video-projects/{pid}/analytics')
+    assert rows.status_code == 200
+    assert len(rows.json()) == 1
+    assert rows.json()[0]['views'] == 1234

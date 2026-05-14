@@ -3,17 +3,20 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import Layout from '../../components/Layout';
 import { apiClient } from '../../lib/apiClient';
-import { VideoProject } from '../../lib/types';
+import { AnalyticsSnapshot, VideoProject } from '../../lib/types';
 
 export default function ProjectDetail() {
   const { query } = useRouter();
   const [project, setProject] = useState<VideoProject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [analytics, setAnalytics] = useState<AnalyticsSnapshot[]>([]);
 
   useEffect(() => {
     if (!query.id || Array.isArray(query.id)) return;
-    apiClient.getProject(query.id).then(setProject).catch((e) => setError(e.message)).finally(() => setLoading(false));
+    Promise.all([apiClient.getProject(query.id), apiClient.listAnalytics(query.id)])
+      .then(([projectData, analyticsData]) => { setProject(projectData); setAnalytics(analyticsData); })
+      .catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [query.id]);
 
   const handleApproval = async (approve: boolean) => {
@@ -32,7 +35,7 @@ export default function ProjectDetail() {
       <div className="card"><h4>Approval</h4><div className="row"><button className="btn primary" onClick={() => handleApproval(true)}>Approve</button><button className="btn" onClick={() => handleApproval(false)}>Reject</button></div></div>
       <div className="card"><h4>Workflow events</h4>{project.workflowEvents.map((e) => <p key={e.id}>{new Date(e.timestamp).toLocaleString()} - {e.actor}: {e.event}</p>)}</div>
       <div className="card"><h4>Costs</h4><p>AI cost: ${project.aiCostUsd.toFixed(2)}</p><p>YouTube quota used: {project.youtubeQuotaUsed}</p></div>
-      <div className="card"><h4>Analytics</h4><p>Estimated CTR: {project.analytics.estimatedCtr}%</p><p>Projected views: {project.analytics.projectedViews}</p></div>
+      <div className="card"><h4>Analytics</h4><p>Estimated CTR: {project.analytics.estimatedCtr}%</p><p>Projected views: {project.analytics.projectedViews}</p>{analytics.map((a) => <p key={a.id}>{new Date(a.snapshot_at).toLocaleString()} • Views: {a.views} • CTR: {a.ctr}% • Revenue: ${a.estimated_revenue}</p>)}</div>
     </div>}
   </Layout>;
 }

@@ -54,3 +54,20 @@ export interface CreateProjectInput {
   language: string;
   targetAudience: string;
 }
+
+
+export interface AnalyticsSnapshot {
+  id: string;
+  video_project_id: string;
+  channel_id: string;
+  youtube_video_id: string;
+  views: number;
+  watch_time_minutes: number;
+  average_view_duration: number;
+  ctr: number;
+  likes: number;
+  comments: number;
+  subscribers_gained: number;
+  estimated_revenue: number;
+  snapshot_at: string;
+}
