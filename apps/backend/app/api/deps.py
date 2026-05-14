@@ -1,14 +1,34 @@
+import logging
+import os
 import uuid
 from collections.abc import AsyncGenerator
-import os
+from dataclasses import dataclass
+from uuid import UUID
 
-from fastapi import Header, Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
 from app.repositories.video_project_repository import DBVideoProjectRepository
-from app.services.video_project_service import VideoProjectService
 from app.services.usage_service import UsageService
+from app.services.video_project_service import VideoProjectService
+
+logger = logging.getLogger("app.authz")
+
+ROLE_MATRIX: dict[str, set[str]] = {
+    "viewer": {"read"},
+    "editor": {"read", "write"},
+    "admin": {"read", "write", "manage"},
+    "owner": {"read", "write", "manage", "owner"},
+}
+
+
+@dataclass(frozen=True)
+class Identity:
+    user_id: UUID
+    org_id: UUID
+    workspace_id: UUID
+    role: str
 
 
 def _parse_api_keys_env() -> dict[str, str]:
@@ -23,18 +43,61 @@ def _parse_api_keys_env() -> dict[str, str]:
     return key_roles
 
 
-def require_mutation_auth(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
-    key_roles = _parse_api_keys_env()
-    if not key_roles:
-        return
-    if not x_api_key or x_api_key not in key_roles:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-    if key_roles[x_api_key] not in {"editor", "admin"}:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-
 def get_correlation_id(x_correlation_id: str | None = Header(default=None)) -> str:
     return x_correlation_id or str(uuid.uuid4())
+
+
+def _audit_authz(identity: Identity | None, decision: str, reason: str, correlation_id: str, action: str, resource: str) -> None:
+    logger.info(
+        "authz decision=%s reason=%s correlation_id=%s action=%s resource=%s identity=%s",
+        decision,
+        reason,
+        correlation_id,
+        action,
+        resource,
+        identity,
+    )
+
+
+def get_identity(
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    x_user_id: UUID | None = Header(default=None, alias="X-User-Id"),
+    x_org_id: UUID | None = Header(default=None, alias="X-Org-Id"),
+    x_workspace_id: UUID | None = Header(default=None, alias="X-Workspace-Id"),
+    correlation_id: str = Depends(get_correlation_id),
+) -> Identity:
+    key_roles = _parse_api_keys_env()
+    if key_roles:
+        if not x_api_key or x_api_key not in key_roles:
+            _audit_authz(None, "deny", "invalid_api_key", correlation_id, "authenticate", "identity")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        role = key_roles[x_api_key]
+    else:
+        role = "owner"
+
+    if role not in ROLE_MATRIX:
+        _audit_authz(None, "deny", "unknown_role", correlation_id, "authenticate", "identity")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    identity = Identity(
+        user_id=x_user_id or UUID("00000000-0000-0000-0000-000000000001"),
+        org_id=x_org_id or UUID("00000000-0000-0000-0000-000000000001"),
+        workspace_id=x_workspace_id or UUID("00000000-0000-0000-0000-000000000001"),
+        role=role,
+    )
+    _audit_authz(identity, "allow", "authenticated", correlation_id, "authenticate", "identity")
+    return identity
+
+
+def require_action(action: str, resource: str):
+    def dependency(identity: Identity = Depends(get_identity), correlation_id: str = Depends(get_correlation_id)) -> Identity:
+        if action not in ROLE_MATRIX.get(identity.role, set()):
+            _audit_authz(identity, "deny", "role_not_allowed", correlation_id, action, resource)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        _audit_authz(identity, "allow", "role_allowed", correlation_id, action, resource)
+        return identity
+
+    return dependency
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
