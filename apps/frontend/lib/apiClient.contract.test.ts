@@ -51,4 +51,11 @@ describe('apiClient contract', () => {
     expect(calledUrls.some((u) => u.includes('/api/v1/video-projects'))).toBe(true);
     expect(calledUrls.every((u) => !u.includes('/projects'))).toBe(true);
   });
+
+
+  it('fails fast on backend 500 errors', async () => {
+    vi.spyOn(global, 'fetch' as never).mockResolvedValue(new Response(JSON.stringify({ detail: 'Internal Server Error' }), { status: 500, statusText: 'Internal Server Error' }) as never);
+
+    await expect(apiClient.getProject('p500')).rejects.toThrow(/HTTP 500/);
+  });
 });

@@ -131,3 +131,41 @@ def test_cross_tenant_usage_access_forbidden(client: TestClient):
     org_id = "00000000-0000-0000-0000-000000000001"
     res = client.get(f"/api/v1/usage/{org_id}", headers=_tenant_headers(org_id=str(uuid4())))
     assert res.status_code == 403
+
+
+def test_publish_requires_approved_status_even_if_scheduled(client: TestClient):
+    project = _create_project(client)
+    plan = _create_plan(client, project)
+
+    force_schedule = client.post(
+        f"/api/v1/video-projects/publishing-plans/{plan['id']}/schedule",
+        json={"scheduled_at": datetime.now(timezone.utc).isoformat()},
+        headers=_tenant_headers(),
+    )
+    assert force_schedule.status_code == 409
+
+
+def test_publish_requires_non_blocked_compliance(client: TestClient):
+    project = _create_project(client)
+    project_id = project["id"]
+
+    req = client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers=_tenant_headers())
+    assert req.status_code == 200
+
+    approve = client.post(f'/api/v1/video-projects/{project_id}/approve', json={"comment": "ok", "decided_by_user_id": str(uuid4())}, headers=_tenant_headers())
+    assert approve.status_code == 200
+
+    compliance = client.post(
+        f'/api/v1/video-projects/{project_id}/compliance',
+        json={"metadata": {"asset_license_risk": "high", "score": 99}, "disclosure_decision_missing": True},
+        headers=_tenant_headers(),
+    )
+    assert compliance.status_code == 200
+
+    plan = _create_plan(client, project)
+    schedule = client.post(
+        f"/api/v1/video-projects/publishing-plans/{plan['id']}/schedule",
+        json={"scheduled_at": datetime.now(timezone.utc).isoformat()},
+        headers=_tenant_headers(),
+    )
+    assert schedule.status_code == 409
