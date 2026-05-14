@@ -7,6 +7,7 @@ from app.services.compliance_service import ComplianceInput, ComplianceService
 from app.services.workflow_engine import WorkflowEngine
 from app.services.youtube_quota_service import YouTubeCallContext, YouTubeQuotaService
 from app.services.usage_service import UsageService
+from app.observability import metrics
 
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
@@ -38,19 +39,23 @@ class VideoProjectService:
         return await self.repo.delete(project_id)
 
     async def start_workflow(self, project_id: UUID):
-        return await self.engine.start(project_id)
+        started = await self.engine.start(project_id)
+        metrics.observe("cycle_time", 0.0)
+        return started
 
     async def request_approval(self, project_id: UUID):
         await self.repo.add_approval_decision(project_id, status=ApprovalStatus.awaiting_review, comment="Approval requested", decided_by_user_id=SYSTEM_USER_ID)
         return await self.repo.update(project_id, {"status": VideoProjectStatus.awaiting_review})
 
     async def approve(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        metrics.observe("approval_latency", 0.0)
         return await self.engine.approve(project_id, comment, decided_by_user_id)
 
     async def reject(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
         return await self.engine.reject(project_id, comment, decided_by_user_id)
 
     async def needs_changes(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        metrics.inc("rework_rate", 1)
         return await self.engine.needs_changes(project_id, comment, decided_by_user_id)
 
     async def get_events(self, project_id: UUID):
@@ -111,6 +116,7 @@ class VideoProjectService:
         if compliance["risk_level"] == ComplianceRiskLevel.blocked:
             raise ValueError("Project is compliance blocked")
         await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.uploading})
+        metrics.inc("quota_usage", 1)
         await self.quota_service.log_call(
             YouTubeCallContext(
                 organization_id=(await self.repo.get(plan["video_project_id"]))["organization_id"],
@@ -121,4 +127,6 @@ class VideoProjectService:
             youtube_method="videos.insert",
             success=True,
         )
-        return await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.published, "youtube_video_id": f"yt_{plan_id.hex[:10]}"})
+        published = await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.published, "youtube_video_id": f"yt_{plan_id.hex[:10]}"})
+        metrics.inc("llm_cost_usd", 0.0)
+        return published
