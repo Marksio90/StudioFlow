@@ -2,8 +2,15 @@
 
 from uuid import UUID
 
-from app.api.deps import get_video_project_service
-from worker_app import celery_app
+from app.repositories.video_project_repository import InMemoryVideoProjectRepository
+from app.services.video_project_service import VideoProjectService
+from apps.worker.worker_app import celery_app
+
+repo_singleton = InMemoryVideoProjectRepository()
+
+
+def get_video_project_service() -> VideoProjectService:
+    return VideoProjectService(repo_singleton)
 
 
 @celery_app.task(name="workflow.video.start")

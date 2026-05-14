@@ -5,6 +5,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY worker_app.py .
+COPY . .
 
 CMD ["celery", "-A", "worker_app.celery_app", "worker", "--loglevel=info"]
