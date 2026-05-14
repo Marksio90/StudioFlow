@@ -35,7 +35,7 @@ export default function ProjectDetail() {
       <div className="card"><h4>Approval</h4><div className="row"><button className="btn primary" onClick={() => handleApproval(true)}>Approve</button><button className="btn" onClick={() => handleApproval(false)}>Reject</button></div></div>
       <div className="card"><h4>Workflow events</h4>{project.workflowEvents.map((e) => <p key={e.id}>{new Date(e.timestamp).toLocaleString()} - {e.actor}: {e.event}</p>)}</div>
       <div className="card"><h4>Costs</h4><p>AI cost: ${project.aiCostUsd.toFixed(2)}</p><p>YouTube quota used: {project.youtubeQuotaUsed}</p></div>
-      <div className="card"><h4>Analytics</h4><p>Estimated CTR: {project.analytics.estimatedCtr}%</p><p>Projected views: {project.analytics.projectedViews}</p>{analytics.map((a) => <p key={a.id}>{new Date(a.snapshot_at).toLocaleString()} • Views: {a.views} • CTR: {a.ctr}% • Revenue: ${a.estimated_revenue}</p>)}</div>
+      <div className="card"><h4>Analytics</h4><p>Estimated CTR: {project.analytics.estimatedCtr}%</p><p>Projected views: {project.analytics.projectedViews}</p>{analytics.map((a) => <p key={a.id}>{new Date(a.snapshotAt).toLocaleString()} • Views: {a.views} • CTR: {a.ctr}% • Revenue: ${a.estimatedRevenue}</p>)}</div>
     </div>}
   </Layout>;
 }
