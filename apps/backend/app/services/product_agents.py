@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
+from hashlib import sha256
+from time import perf_counter
 from typing import Protocol
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -16,22 +20,32 @@ class RetryPolicy(BaseModel):
 
 
 @dataclass
-class CostEvent:
-    agent_name: str
-    prompt_tokens: int
-    completion_tokens: int
-    total_cost_usd: Decimal
+class LLMCallRecord:
+    organization_id: UUID
+    workspace_id: UUID
+    video_project_id: UUID
+    workflow_run_id: UUID | None
+    provider: str
+    model: str
+    task_type: str
+    input_tokens: int
+    output_tokens: int
+    estimated_cost: Decimal
+    latency_ms: int
+    cache_hit: bool
+    request_hash: str
+    created_at: datetime
 
 
 class CostTracker(Protocol):
-    def record(self, event: CostEvent) -> None: ...
+    def record(self, event: LLMCallRecord) -> None: ...
 
 
 class NoopCostTracker:
     def __init__(self) -> None:
-        self.events: list[CostEvent] = []
+        self.events: list[LLMCallRecord] = []
 
-    def record(self, event: CostEvent) -> None:
+    def record(self, event: LLMCallRecord) -> None:
         self.events.append(event)
 
 
@@ -51,28 +65,74 @@ class MockLLMProvider:
         return {"agent_name": agent_name, "payload": payload, "call": self.calls}
 
 
+
+
+class ModelRouter:
+    def resolve(self, *, task_type: str) -> str:
+        mapping = {
+            "ResearchAgent": "gpt-4.1-mini",
+            "ScriptAgent": "gpt-4.1",
+            "SEOAgent": "gpt-4.1-mini",
+            "ComplianceAgent": "gpt-4.1-mini",
+            "PerformanceAgent": "gpt-4.1-mini",
+        }
+        return mapping.get(task_type, "gpt-4.1-mini")
+
+
+@dataclass
+class LLMRequestContext:
+    organization_id: UUID
+    workspace_id: UUID
+    video_project_id: UUID
+    workflow_run_id: UUID | None
+
+
+class TrackedLLMClient:
+    def __init__(self, provider: MockLLMProvider, model_router: ModelRouter | None = None, cost_tracker: CostTracker | None = None) -> None:
+        self.provider = provider
+        self.model_router = model_router or ModelRouter()
+        self.cost_tracker = cost_tracker or NoopCostTracker()
+
+    def generate(self, *, task_type: str, payload: dict, context: LLMRequestContext) -> dict:
+        started = perf_counter()
+        raw = self.provider.generate(agent_name=task_type, payload=payload)
+        latency_ms = int((perf_counter() - started) * 1000)
+        model = self.model_router.resolve(task_type=task_type)
+        input_tokens = max(1, len(str(payload)) // 4)
+        output_tokens = max(1, len(str(raw)) // 4)
+        est_cost = Decimal(input_tokens * 0.0000002 + output_tokens * 0.0000008).quantize(Decimal("0.00000001"))
+        request_hash = sha256(f"{task_type}:{payload}".encode()).hexdigest()
+        self.cost_tracker.record(LLMCallRecord(
+            organization_id=context.organization_id,
+            workspace_id=context.workspace_id,
+            video_project_id=context.video_project_id,
+            workflow_run_id=context.workflow_run_id,
+            provider="mock-openai",
+            model=model,
+            task_type=task_type,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost=est_cost,
+            latency_ms=latency_ms,
+            cache_hit=False,
+            request_hash=request_hash,
+            created_at=datetime.now(timezone.utc),
+        ))
+        return raw
+
 class BaseAgent:
     name = "base"
 
-    def __init__(self, provider: MockLLMProvider, retry: RetryPolicy | None = None, cost_tracker: CostTracker | None = None) -> None:
-        self.provider = provider
+    def __init__(self, llm_client: TrackedLLMClient, context: LLMRequestContext, retry: RetryPolicy | None = None) -> None:
+        self.llm_client = llm_client
+        self.context = context
         self.retry = retry or RetryPolicy()
-        self.cost_tracker = cost_tracker or NoopCostTracker()
 
     def _generate(self, payload: dict) -> dict:
         last_error: Exception | None = None
         for _ in range(self.retry.max_attempts):
             try:
-                raw = self.provider.generate(agent_name=self.name, payload=payload)
-                self.cost_tracker.record(
-                    CostEvent(
-                        agent_name=self.name,
-                        prompt_tokens=120,
-                        completion_tokens=240,
-                        total_cost_usd=Decimal("0.0012"),
-                    )
-                )
-                return raw
+                return self.llm_client.generate(task_type=self.name, payload=payload, context=self.context)
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
         raise AgentExecutionError(f"{self.name} failed after {self.retry.max_attempts} attempts") from last_error
@@ -234,12 +294,13 @@ class ProductWorkflowResult(BaseModel):
 
 
 class ProductWorkflow:
-    def __init__(self, provider: MockLLMProvider, retry: RetryPolicy | None = None, cost_tracker: CostTracker | None = None) -> None:
-        self.research = ResearchAgent(provider, retry=retry, cost_tracker=cost_tracker)
-        self.script = ScriptAgent(provider, retry=retry, cost_tracker=cost_tracker)
-        self.seo = SEOAgent(provider, retry=retry, cost_tracker=cost_tracker)
-        self.compliance = ComplianceAgent(provider, retry=retry, cost_tracker=cost_tracker)
-        self.performance = PerformanceAgent(provider, retry=retry, cost_tracker=cost_tracker)
+    def __init__(self, provider: MockLLMProvider, context: LLMRequestContext, retry: RetryPolicy | None = None, cost_tracker: CostTracker | None = None) -> None:
+        tracked = TrackedLLMClient(provider, model_router=ModelRouter(), cost_tracker=cost_tracker)
+        self.research = ResearchAgent(tracked, context=context, retry=retry)
+        self.script = ScriptAgent(tracked, context=context, retry=retry)
+        self.seo = SEOAgent(tracked, context=context, retry=retry)
+        self.compliance = ComplianceAgent(tracked, context=context, retry=retry)
+        self.performance = PerformanceAgent(tracked, context=context, retry=retry)
 
     def run(self, *, research_input: ResearchInput, script_input: ScriptInput, seo_input: SEOInput, compliance_input: ComplianceInput, performance_input: PerformanceInput) -> ProductWorkflowResult:
         research = self.research.run(research_input)

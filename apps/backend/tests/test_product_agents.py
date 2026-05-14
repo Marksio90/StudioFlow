@@ -1,4 +1,5 @@
 import pytest
+from uuid import uuid4
 
 from app.services.product_agents import (
     AgentExecutionError,
@@ -6,6 +7,7 @@ from app.services.product_agents import (
     MockLLMProvider,
     NoopCostTracker,
     PerformanceInput,
+    LLMRequestContext,
     ProductWorkflow,
     ResearchInput,
     RetryPolicy,
@@ -41,10 +43,14 @@ def _inputs():
     return research, script, seo, compliance, performance
 
 
+def _context():
+    return LLMRequestContext(organization_id=uuid4(), workspace_id=uuid4(), video_project_id=uuid4(), workflow_run_id=uuid4())
+
+
 def test_all_agents_return_structured_json_models():
     provider = MockLLMProvider()
     tracker = NoopCostTracker()
-    workflow = ProductWorkflow(provider, cost_tracker=tracker)
+    workflow = ProductWorkflow(provider, context=_context(), cost_tracker=tracker)
     research, script, seo, compliance, performance = _inputs()
 
     result = workflow.run(
@@ -63,11 +69,24 @@ def test_all_agents_return_structured_json_models():
     assert isinstance(payload["compliance"]["blocking_issues"], list)
     assert isinstance(payload["performance"]["what_worked"], list)
     assert len(tracker.events) == 5
+    agent_names = {e.task_type for e in tracker.events}
+    assert {"ResearchAgent", "ScriptAgent", "SEOAgent", "ComplianceAgent"}.issubset(agent_names)
+    first = tracker.events[0]
+    assert first.organization_id
+    assert first.workspace_id
+    assert first.video_project_id
+    assert first.workflow_run_id
+    assert first.provider
+    assert first.model
+    assert first.input_tokens > 0
+    assert first.output_tokens > 0
+    assert first.estimated_cost > 0
+    assert len(first.request_hash) == 64
 
 
 def test_retry_policy_handles_transient_failures():
     provider = MockLLMProvider(failures_before_success=1)
-    workflow = ProductWorkflow(provider, retry=RetryPolicy(max_attempts=2))
+    workflow = ProductWorkflow(provider, context=_context(), retry=RetryPolicy(max_attempts=2))
     research, script, seo, compliance, performance = _inputs()
 
     result = workflow.run(
@@ -83,7 +102,7 @@ def test_retry_policy_handles_transient_failures():
 
 def test_retry_policy_raises_after_exhaustion():
     provider = MockLLMProvider(failures_before_success=99)
-    workflow = ProductWorkflow(provider, retry=RetryPolicy(max_attempts=2))
+    workflow = ProductWorkflow(provider, context=_context(), retry=RetryPolicy(max_attempts=2))
     research, script, seo, compliance, performance = _inputs()
 
     with pytest.raises(AgentExecutionError):
