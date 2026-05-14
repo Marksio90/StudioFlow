@@ -6,6 +6,8 @@ celery_app = Celery(
     backend="redis://redis:6379/1",
 )
 
+import apps.worker.app.tasks.video_workflow  # noqa: E402,F401
+
 
 @celery_app.task(name="worker.ping")
 def ping() -> str:
