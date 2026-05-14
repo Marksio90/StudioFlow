@@ -37,15 +37,15 @@ def test_workflow_e2e_scenario():
     assert 'workflow.created' in event_types
     assert 'workflow.waiting_for_approval' in event_types
 
-    approved = client.post(f'/api/v1/video-projects/{pid}/approve')
+    approved = client.post(f'/api/v1/video-projects/{pid}/approve', json={'comment':'ok','decided_by_user_id': str(uuid4())})
     assert approved.status_code == 200
     assert approved.json()['status'] == 'approved'
     project_after_approve = client.get(f'/api/v1/video-projects/{pid}').json()
     assert project_after_approve['status'] == 'approved'
 
-    rejected = client.post(f'/api/v1/video-projects/{pid}/reject')
+    rejected = client.post(f'/api/v1/video-projects/{pid}/reject', json={'comment':'no','decided_by_user_id': str(uuid4())})
     assert rejected.status_code == 200
-    assert rejected.json()['status'] == 'needs_changes'
+    assert rejected.json()['status'] == 'rejected'
 
 
 def test_compliance_can_block_approval():
@@ -67,7 +67,7 @@ def test_compliance_can_block_approval():
     assert compliance.status_code == 200
     assert compliance.json()['risk_level'] == 'blocked'
 
-    approved = client.post(f'/api/v1/video-projects/{pid}/approve')
+    approved = client.post(f'/api/v1/video-projects/{pid}/approve', json={'comment':'ok','decided_by_user_id': str(uuid4())})
     assert approved.status_code == 200
     assert approved.json()['status'] == 'blocked'
 
@@ -151,3 +151,24 @@ def test_quota_endpoint_returns_project_and_channel_aggregation():
     body = quota.json()
     assert body['project_quota_cost'] == 1601
     assert body['channel_quota_cost'] == 1701
+
+
+def test_needs_changes_and_decision_history_available():
+    created = client.post('/api/v1/video-projects', json=create_payload())
+    pid = created.json()['id']
+    client.post(f'/api/v1/video-projects/{pid}/request-approval')
+
+    change = client.post(
+        f'/api/v1/video-projects/{pid}/needs-changes',
+        json={'comment': 'update intro', 'decided_by_user_id': str(uuid4())},
+    )
+    assert change.status_code == 200
+    assert change.json()['status'] == 'needs_changes'
+
+    project = client.get(f'/api/v1/video-projects/{pid}').json()
+    assert project['status'] == 'needs_changes'
+
+    history = client.get(f'/api/v1/video-projects/{pid}/approval-decisions')
+    assert history.status_code == 200
+    assert len(history.json()) == 1
+    assert history.json()[0]['comment'] == 'update intro'

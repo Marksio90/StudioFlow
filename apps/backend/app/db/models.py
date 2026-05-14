@@ -96,8 +96,9 @@ class WorkflowEvent(Base, UUIDMixin, TimestampMixin):
 class ApprovalDecision(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "approval_decisions"
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
-    status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus), default=ApprovalStatus.pending, nullable=False)
+    status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus), default=ApprovalStatus.awaiting_review, nullable=False)
     comment: Mapped[str] = mapped_column(Text, nullable=True)
+    decided_by_user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
 
 class LLMCall(Base, UUIDMixin, TimestampMixin):

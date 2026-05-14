@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from app.db.enums import ComplianceRiskLevel, VideoProjectStatus
+from app.db.enums import ApprovalStatus, ComplianceRiskLevel, VideoProjectStatus
 
 
 class InMemoryVideoProjectRepository:
@@ -14,6 +14,7 @@ class InMemoryVideoProjectRepository:
         self.llm_calls: dict[UUID, list[dict]] = {}
         self.llm_cost_ledger_entries: dict[UUID, list[dict]] = {}
         self.youtube_quota_ledger_entries: list[dict] = []
+        self.approval_decisions: dict[UUID, list[dict]] = {}
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -132,3 +133,18 @@ class InMemoryVideoProjectRepository:
 
     def get_analytics(self, project_id: UUID):
         return {"video_project_id": project_id, "views": 0, "watch_time": 0}
+
+    def add_approval_decision(self, project_id: UUID, status: ApprovalStatus, comment: str | None, decided_by_user_id: UUID):
+        decision = {
+            "id": uuid4(),
+            "video_project_id": project_id,
+            "status": status.value,
+            "comment": comment,
+            "decided_by_user_id": decided_by_user_id,
+            "created_at": datetime.now(timezone.utc),
+        }
+        self.approval_decisions.setdefault(project_id, []).append(decision)
+        return decision
+
+    def get_approval_decisions(self, project_id: UUID):
+        return self.approval_decisions.get(project_id, [])
