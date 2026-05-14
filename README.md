@@ -76,6 +76,9 @@ Frontend:
 - lint (`npm run lint`)
 
 CI (GitHub Actions) uruchamia:
+- backend lint/typecheck (`ruff check`, `mypy`)
 - backend tests
 - frontend typecheck
+- frontend lint
+- security checks (`pip-audit`, `npm audit --omit=dev`)
 - docker build
