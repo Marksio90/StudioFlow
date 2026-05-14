@@ -53,3 +53,22 @@ class WorkflowEventOut(BaseModel):
 class ComplianceOut(BaseModel):
     risk_level: ComplianceRiskLevel
     findings: Optional[str] = None
+
+
+class ComplianceReportOut(BaseModel):
+    video_project_id: UUID
+    score: int
+    risk_level: ComplianceRiskLevel
+    requires_ai_disclosure: bool
+    disclosure_decision_missing: bool
+    ai_disclosure_risk: str
+    inauthentic_content_risk: str
+    repetitive_content_risk: str
+    copyright_risk: str
+    sensitive_claims_risk: str
+    clickbait_risk: str
+    asset_license_risk: str
+    synthetic_media_realism_risk: str
+    reasons: list[str]
+    recommendations: list[str]
+    blocking_issues: list[str]
