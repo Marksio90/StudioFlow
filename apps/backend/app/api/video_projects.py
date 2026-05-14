@@ -147,3 +147,14 @@ async def schedule_publishing(plan_id: UUID, payload: PublishingPlanSchedule, se
         return await service.schedule_publishing(plan_id, payload.scheduled_at)
     except ValueError as exc:
         raise structured_error(409, "PUBLISHING_PLAN_INVALID", str(exc), correlation_id)
+
+
+@router.post("/publishing-plans/{plan_id}/publish", response_model=PublishingPlanOut)
+async def publish_video(plan_id: UUID, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id), auth: None = Depends(require_mutation_auth)):
+    plan = await service.repo.get_publishing_plan(plan_id)
+    if not plan:
+        raise structured_error(404, "PUBLISHING_PLAN_NOT_FOUND", "PublishingPlan not found", correlation_id)
+    try:
+        return await service.publish_video(plan_id)
+    except ValueError as exc:
+        raise structured_error(409, "PUBLISHING_PLAN_INVALID", str(exc), correlation_id)

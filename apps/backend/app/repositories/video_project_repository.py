@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +54,7 @@ class DBVideoProjectRepository:
         self.session.add(row); await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
         return {"id": row.id, "video_project_id": row.video_project_id, "state": row.state, "created_at": row.created_at}
     async def get_latest_workflow_run(self, video_project_id: UUID):
-        row = (await self.session.scalars(select(WorkflowRun).where(WorkflowRun.video_project_id == video_project_id).order_by(WorkflowRun.created_at.desc()))).first()
+        row = (await self.session.scalars(select(WorkflowRun).where(WorkflowRun.video_project_id == video_project_id).order_by(WorkflowRun.created_at.desc(), WorkflowRun.id.desc()))).first()
         return {"id": row.id} if row else None
     async def create_workflow_step(self, workflow_run_id: UUID, video_project_id: UUID, step_name: str, status: str, attempt: int, idempotency_key: str, input_json: dict):
         row = WorkflowStep(workflow_run_id=workflow_run_id, step_name=step_name, state=status)
@@ -66,7 +66,15 @@ class DBVideoProjectRepository:
         if workflow_run_id:
             self.session.add(WorkflowEvent(workflow_run_id=workflow_run_id, event_type=event["event_type"], payload=event["payload"]))
             await self.session.commit()
-    async def get_events(self, project_id: UUID): return []
+    async def get_events(self, project_id: UUID):
+        stmt = (
+            select(WorkflowEvent)
+            .join(WorkflowRun, WorkflowRun.id == WorkflowEvent.workflow_run_id)
+            .where(WorkflowRun.video_project_id == project_id)
+            .order_by(WorkflowEvent.created_at.asc(), WorkflowEvent.id.asc())
+        )
+        rows = (await self.session.scalars(stmt)).all()
+        return [{"id": r.id, "workflow_run_id": r.workflow_run_id, "event_type": r.event_type, "payload": r.payload, "created_at": r.created_at} for r in rows]
     async def log_llm_call(self, project_id: UUID, call: dict): return None
     async def log_llm_cost_entry(self, project_id: UUID, entry: dict):
         p = await self.get(project_id)
@@ -76,7 +84,11 @@ class DBVideoProjectRepository:
         total = await self.session.scalar(select(func.coalesce(func.sum(LLMCostLedgerEntry.cost_usd),0.0)).where(LLMCostLedgerEntry.video_project_id==project_id))
         return {"video_project_id": project_id, "total_cost_usd": round(float(total), 8)}
     async def log_youtube_quota_entry(self, entry: dict): self.session.add(YouTubeQuotaLedgerEntry(**entry)); await self.session.commit(); return entry
-    async def get_quota(self, project_id: UUID): return {"video_project_id": project_id, "project_quota_cost": 0, "channel_quota_cost": 0}
+    async def get_quota(self, project_id: UUID):
+        project = await self.get(project_id)
+        project_total = await self.session.scalar(select(func.coalesce(func.sum(YouTubeQuotaLedgerEntry.quota_cost), 0)).where(YouTubeQuotaLedgerEntry.video_project_id == project_id))
+        channel_total = await self.session.scalar(select(func.coalesce(func.sum(YouTubeQuotaLedgerEntry.quota_cost), 0)).where(YouTubeQuotaLedgerEntry.channel_id == project["channel_id"])) if project else 0
+        return {"video_project_id": project_id, "project_quota_cost": int(project_total or 0), "channel_quota_cost": int(channel_total or 0)}
     async def get_compliance(self, project_id: UUID):
         row = (await self.session.scalars(select(ComplianceReport).where(ComplianceReport.video_project_id==project_id).order_by(ComplianceReport.created_at.desc()))).first()
         if row:
@@ -87,16 +99,39 @@ class DBVideoProjectRepository:
         row = ComplianceReport(video_project_id=project_id, risk_level=report.get("risk_level", ComplianceRiskLevel.low), findings=json.dumps(report, default=str))
         self.session.add(row); await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
         return report
-    async def create_analytics_snapshot(self, payload: dict): return payload
-    async def get_analytics(self, project_id: UUID): return []
+    async def create_analytics_snapshot(self, payload: dict):
+        row = AnalyticsSnapshot(**payload)
+        self.session.add(row)
+        await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
+        return {"id": row.id, "video_project_id": row.video_project_id, "channel_id": row.channel_id, "youtube_video_id": row.payload["youtube_video_id"], "views": row.payload["views"], "watch_time_minutes": row.payload["watch_time_minutes"], "average_view_duration": row.payload["average_view_duration"], "ctr": row.payload["ctr"], "likes": row.payload["likes"], "comments": row.payload["comments"], "subscribers_gained": row.payload["subscribers_gained"], "estimated_revenue": row.payload["estimated_revenue"], "snapshot_at": row.payload["snapshot_at"], "created_at": row.created_at, "updated_at": row.updated_at}
+    async def get_analytics(self, project_id: UUID):
+        rows = (await self.session.scalars(select(AnalyticsSnapshot).where(AnalyticsSnapshot.video_project_id == project_id).order_by(AnalyticsSnapshot.created_at.asc(), AnalyticsSnapshot.id.asc()))).all()
+        return [{"id": r.id, "video_project_id": r.video_project_id, "channel_id": r.channel_id, "youtube_video_id": r.payload["youtube_video_id"], "views": r.payload["views"], "watch_time_minutes": r.payload["watch_time_minutes"], "average_view_duration": r.payload["average_view_duration"], "ctr": r.payload["ctr"], "likes": r.payload["likes"], "comments": r.payload["comments"], "subscribers_gained": r.payload["subscribers_gained"], "estimated_revenue": r.payload["estimated_revenue"], "snapshot_at": r.payload["snapshot_at"], "created_at": r.created_at, "updated_at": r.updated_at} for r in rows]
     async def add_approval_decision(self, project_id: UUID, status: ApprovalStatus, comment: str | None, decided_by_user_id: UUID):
         row = ApprovalDecision(video_project_id=project_id,status=status,comment=comment,decided_by_user_id=decided_by_user_id)
         self.session.add(row); await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
         return {"status": status.value, "comment": comment}
-    async def get_approval_decisions(self, project_id: UUID): return []
-    async def create_publishing_plan(self, payload: dict): return {"id": uuid4(), **payload, "status": PublishingPlanStatus.draft}
-    async def get_publishing_plan(self, plan_id: UUID): return None
-    async def update_publishing_plan(self, plan_id: UUID, data: dict): return {"id": plan_id, **data}
+    async def get_approval_decisions(self, project_id: UUID):
+        rows = (await self.session.scalars(select(ApprovalDecision).where(ApprovalDecision.video_project_id == project_id).order_by(ApprovalDecision.created_at.asc(), ApprovalDecision.id.asc()))).all()
+        return [{"id": r.id, "video_project_id": r.video_project_id, "status": r.status.value, "comment": r.comment, "decided_by_user_id": r.decided_by_user_id, "created_at": r.created_at} for r in rows]
+    async def create_publishing_plan(self, payload: dict):
+        row = PublishingPlan(**payload, status=PublishingPlanStatus.draft)
+        self.session.add(row)
+        await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
+        return self._publishing_plan_to_dict(row)
+    async def get_publishing_plan(self, plan_id: UUID):
+        row = await self.session.get(PublishingPlan, plan_id)
+        return self._publishing_plan_to_dict(row) if row else None
+    async def update_publishing_plan(self, plan_id: UUID, data: dict):
+        row = await self.session.get(PublishingPlan, plan_id)
+        for k, v in data.items():
+            if v is not None:
+                setattr(row, k, v)
+        await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
+        return self._publishing_plan_to_dict(row)
+
+    def _publishing_plan_to_dict(self, row: PublishingPlan):
+        return {"id": row.id, "video_project_id": row.video_project_id, "channel_id": row.channel_id, "scheduled_at": row.scheduled_at, "status": row.status, "youtube_video_id": row.youtube_video_id, "title": row.title, "description": row.description, "tags": row.tags, "visibility": row.visibility, "created_at": row.created_at, "updated_at": row.updated_at}
     async def set_plan(self, organization_id: UUID, plan_code: str):
         org = await self.session.get(Organization, organization_id)
         if org:

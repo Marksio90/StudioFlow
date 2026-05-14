@@ -103,6 +103,13 @@ class VideoProjectService:
         plan = await self.repo.get_publishing_plan(plan_id)
         if plan["status"] != PublishingPlanStatus.scheduled:
             raise ValueError("Plan is not scheduled")
+        decisions = await self.repo.get_approval_decisions(plan["video_project_id"])
+        latest_status = decisions[-1]["status"] if decisions else ApprovalStatus.awaiting_review.value
+        if latest_status != ApprovalStatus.approved.value:
+            raise ValueError("Project is not approved")
+        compliance = await self.repo.get_compliance(plan["video_project_id"])
+        if compliance["risk_level"] == ComplianceRiskLevel.blocked:
+            raise ValueError("Project is compliance blocked")
         await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.uploading})
         await self.quota_service.log_call(
             YouTubeCallContext(
