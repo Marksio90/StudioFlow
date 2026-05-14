@@ -13,6 +13,7 @@ class InMemoryVideoProjectRepository:
         self.compliance_reports: dict[UUID, dict] = {}
         self.llm_calls: dict[UUID, list[dict]] = {}
         self.llm_cost_ledger_entries: dict[UUID, list[dict]] = {}
+        self.youtube_quota_ledger_entries: list[dict] = []
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -89,8 +90,18 @@ class InMemoryVideoProjectRepository:
         total = sum(item.get("cost_usd", 0.0) for item in self.llm_cost_ledger_entries.get(project_id, []))
         return {"video_project_id": project_id, "total_cost_usd": round(total, 8)}
 
+    def log_youtube_quota_entry(self, entry: dict):
+        self.youtube_quota_ledger_entries.append(entry)
+        return entry
+
     def get_quota(self, project_id: UUID):
-        return {"video_project_id": project_id, "units_used": 0}
+        project = self.get(project_id)
+        if not project:
+            return {"video_project_id": project_id, "project_quota_cost": 0, "channel_quota_cost": 0}
+
+        project_total = sum(item.get("quota_cost", 0) for item in self.youtube_quota_ledger_entries if item.get("video_project_id") == project_id)
+        channel_total = sum(item.get("quota_cost", 0) for item in self.youtube_quota_ledger_entries if item.get("channel_id") == project.get("channel_id"))
+        return {"video_project_id": project_id, "channel_id": project.get("channel_id"), "project_quota_cost": project_total, "channel_quota_cost": channel_total}
 
     def get_compliance(self, project_id: UUID):
         return self.compliance_reports.get(

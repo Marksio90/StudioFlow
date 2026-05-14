@@ -100,3 +100,54 @@ def test_costs_endpoint_returns_aggregated_llm_costs():
     costs = client.get(f'/api/v1/video-projects/{pid}/costs')
     assert costs.status_code == 200
     assert costs.json()['total_cost_usd'] == 0.0035
+
+
+def test_quota_endpoint_returns_project_and_channel_aggregation():
+    payload = create_payload()
+    created = client.post('/api/v1/video-projects', json=payload)
+    pid = created.json()['id']
+    project_uuid = UUID(pid)
+
+    # second project in the same channel to validate channel aggregation
+    created2 = client.post('/api/v1/video-projects', json={**payload, "title": "Second"})
+    project2_uuid = UUID(created2.json()['id'])
+
+    repo_singleton.log_youtube_quota_entry({
+        "organization_id": UUID(payload["organization_id"]),
+        "workspace_id": UUID(payload["workspace_id"]),
+        "channel_id": UUID(payload["channel_id"]),
+        "video_project_id": project_uuid,
+        "workflow_run_id": uuid4(),
+        "youtube_method": "videos.list",
+        "quota_cost": 1,
+        "success": True,
+        "retry_of_id": None,
+    })
+    repo_singleton.log_youtube_quota_entry({
+        "organization_id": UUID(payload["organization_id"]),
+        "workspace_id": UUID(payload["workspace_id"]),
+        "channel_id": UUID(payload["channel_id"]),
+        "video_project_id": project_uuid,
+        "workflow_run_id": uuid4(),
+        "youtube_method": "videos.insert",
+        "quota_cost": 1600,
+        "success": False,
+        "retry_of_id": uuid4(),
+    })
+    repo_singleton.log_youtube_quota_entry({
+        "organization_id": UUID(payload["organization_id"]),
+        "workspace_id": UUID(payload["workspace_id"]),
+        "channel_id": UUID(payload["channel_id"]),
+        "video_project_id": project2_uuid,
+        "workflow_run_id": uuid4(),
+        "youtube_method": "search.list",
+        "quota_cost": 100,
+        "success": True,
+        "retry_of_id": None,
+    })
+
+    quota = client.get(f'/api/v1/video-projects/{pid}/quota')
+    assert quota.status_code == 200
+    body = quota.json()
+    assert body['project_quota_cost'] == 1601
+    assert body['channel_quota_cost'] == 1701
