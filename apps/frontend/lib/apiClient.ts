@@ -1,4 +1,5 @@
 import { AnalyticsSnapshot, CreateProjectInput, ProjectStatus, VideoProject } from './types';
+import type { components, operations } from '../../../packages/shared/src/backend-api';
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:8000';
@@ -11,58 +12,27 @@ type ApiRequestOptions = {
   onLoadingChange?: (isLoading: boolean) => void;
 };
 
-interface BackendComplianceReport {
-  score: number;
-  risk_level: 'low' | 'medium' | 'high';
-  blocking_issues: string[];
-  recommendations: string[];
-}
+type BackendComplianceReport = components['schemas']['ComplianceReportOut'];
+type BackendWorkflowEvent = components['schemas']['WorkflowEventOut'];
+type BackendAnalyticsSnapshot = components['schemas']['AnalyticsSnapshotOut'];
 
-interface BackendWorkflowEvent {
-  id: string;
-  timestamp: string;
-  actor: string;
-  event: string;
-}
-
-interface BackendVideoProject {
-  id: string;
-  title: string;
-  topic: string;
-  description: string;
-  channel: string;
-  language: string;
-  target_audience: string;
-  status: ProjectStatus;
-  ai_cost_usd: number;
-  youtube_quota_used: number;
-  created_at: string;
-  updated_at: string;
-  overview: string;
-  research: string;
-  script: string;
-  seo: string;
+type BackendVideoProject = components['schemas']['VideoProjectOut'] & {
+  topic?: string;
+  description?: string;
+  channel?: string;
+  language?: string;
+  target_audience?: string;
+  ai_cost_usd?: number;
+  youtube_quota_used?: number;
+  overview?: string;
+  research?: string;
+  script?: string;
+  seo?: string;
   approval_note?: string;
-  compliance: BackendComplianceReport;
-  workflow_events: BackendWorkflowEvent[];
-  analytics: { estimated_ctr: number; projected_views: number };
-}
-
-interface BackendAnalyticsSnapshot {
-  id: string;
-  video_project_id: string;
-  channel_id: string;
-  youtube_video_id: string;
-  views: number;
-  watch_time_minutes: number;
-  average_view_duration: number;
-  ctr: number;
-  likes: number;
-  comments: number;
-  subscribers_gained: number;
-  estimated_revenue: number;
-  snapshot_at: string;
-}
+  compliance?: BackendComplianceReport;
+  workflow_events?: BackendWorkflowEvent[];
+  analytics?: { estimated_ctr: number; projected_views: number };
+};
 
 const buildApiUrl = (path: string, query?: ApiRequestOptions['query']) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -80,31 +50,36 @@ const buildApiUrl = (path: string, query?: ApiRequestOptions['query']) => {
 const mapProjectDto = (dto: BackendVideoProject): VideoProject => ({
   id: dto.id,
   title: dto.title,
-  topic: dto.topic,
-  description: dto.description,
-  channel: dto.channel,
-  language: dto.language,
-  targetAudience: dto.target_audience,
+  topic: dto.topic ?? '',
+  description: dto.description ?? '',
+  channel: dto.channel ?? '',
+  language: dto.language ?? '',
+  targetAudience: dto.target_audience ?? '',
   status: dto.status,
-  aiCostUsd: dto.ai_cost_usd,
-  youtubeQuotaUsed: dto.youtube_quota_used,
+  aiCostUsd: dto.ai_cost_usd ?? 0,
+  youtubeQuotaUsed: dto.youtube_quota_used ?? 0,
   createdAt: dto.created_at,
   updatedAt: dto.updated_at,
-  overview: dto.overview,
-  research: dto.research,
-  script: dto.script,
-  seo: dto.seo,
+  overview: dto.overview ?? '',
+  research: dto.research ?? '',
+  script: dto.script ?? '',
+  seo: dto.seo ?? '',
   approvalNote: dto.approval_note,
   compliance: {
-    score: dto.compliance.score,
-    riskLevel: dto.compliance.risk_level,
-    blockingIssues: dto.compliance.blocking_issues,
-    recommendations: dto.compliance.recommendations
+    score: dto.compliance?.score ?? 0,
+    riskLevel: dto.compliance?.risk_level ?? 'low',
+    blockingIssues: dto.compliance?.blocking_issues ?? [],
+    recommendations: dto.compliance?.recommendations ?? []
   },
-  workflowEvents: dto.workflow_events,
+  workflowEvents: (dto.workflow_events ?? []).map((event) => ({
+    id: event.id,
+    timestamp: new Date().toISOString(),
+    actor: event.payload?.actor ? String(event.payload.actor) : "system",
+    event: event.event_type
+  })),
   analytics: {
-    estimatedCtr: dto.analytics.estimated_ctr,
-    projectedViews: dto.analytics.projected_views
+    estimatedCtr: dto.analytics?.estimated_ctr ?? 0,
+    projectedViews: dto.analytics?.projected_views ?? 0
   }
 });
 

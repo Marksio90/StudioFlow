@@ -1,0 +1,11 @@
+{
+  "name": "@ai-media-ops/shared",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "generate:api": "openapi-typescript openapi/backend.openapi.json -o src/backend-api.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.10.1"
+  }
+}
