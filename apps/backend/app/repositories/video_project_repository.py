@@ -1,13 +1,14 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from app.db.enums import ApprovalStatus, ComplianceRiskLevel, VideoProjectStatus
+from app.db.enums import ComplianceRiskLevel, VideoProjectStatus
 
 
 class InMemoryVideoProjectRepository:
     def __init__(self) -> None:
         self.projects: dict[UUID, dict] = {}
         self.workflow_runs: dict[UUID, list[dict]] = {}
+        self.workflow_steps: dict[UUID, list[dict]] = {}
         self.events: dict[UUID, list[dict]] = {}
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
@@ -36,20 +37,41 @@ class InMemoryVideoProjectRepository:
         row["updated_at"] = datetime.now(timezone.utc)
         return row
 
+    def update_project_status(self, project_id: UUID, status: VideoProjectStatus):
+        return self.update(project_id, {"status": status})
+
     def delete(self, project_id: UUID):
         self.projects.pop(project_id, None)
 
-    def create_workflow(self, project_id: UUID):
-        run = {"id": uuid4(), "video_project_id": project_id, "state": "created"}
-        self.workflow_runs.setdefault(project_id, []).append(run)
-        evt = {"id": uuid4(), "workflow_run_id": run["id"], "event_type": "workflow.created", "payload": {"video_project_id": str(project_id)}}
-        self.events.setdefault(project_id, []).append(evt)
+    def create_workflow_run(self, video_project_id: UUID):
+        run = {"id": uuid4(), "video_project_id": video_project_id, "state": "running", "created_at": datetime.now(timezone.utc)}
+        self.workflow_runs.setdefault(video_project_id, []).append(run)
         return run
 
-    def set_approval(self, project_id: UUID, approved: bool):
-        row = self.projects[project_id]
-        row["status"] = VideoProjectStatus.approved if approved else VideoProjectStatus.awaiting_review
-        return {"status": ApprovalStatus.approved if approved else ApprovalStatus.rejected}
+    def get_latest_workflow_run(self, video_project_id: UUID):
+        runs = self.workflow_runs.get(video_project_id, [])
+        return runs[-1] if runs else None
+
+    def create_workflow_step(self, workflow_run_id: UUID, video_project_id: UUID, step_name: str, status: str, attempt: int, idempotency_key: str, input_json: dict):
+        step = {
+            "id": uuid4(),
+            "workflow_run_id": workflow_run_id,
+            "video_project_id": video_project_id,
+            "step_name": step_name,
+            "status": status,
+            "idempotency_key": idempotency_key,
+            "attempt": attempt,
+            "input_json": input_json,
+            "output_json": {},
+            "error_message": None,
+            "started_at": None,
+            "finished_at": None,
+        }
+        self.workflow_steps.setdefault(video_project_id, []).append(step)
+        return step
+
+    def append_event(self, video_project_id: UUID, event: dict):
+        self.events.setdefault(video_project_id, []).append(event)
 
     def get_events(self, project_id: UUID):
         return self.events.get(project_id, [])

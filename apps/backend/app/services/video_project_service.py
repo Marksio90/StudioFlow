@@ -2,11 +2,13 @@ from uuid import UUID
 
 from app.db.enums import VideoProjectStatus
 from app.schemas.video_project import VideoProjectCreate, VideoProjectUpdate
+from app.services.workflow_engine import WorkflowEngine
 
 
 class VideoProjectService:
     def __init__(self, repo):
         self.repo = repo
+        self.engine = WorkflowEngine(repo)
 
     def list_projects(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         return self.repo.list(limit=limit, offset=offset, status=status, channel_id=channel_id, workspace_id=workspace_id)
@@ -24,16 +26,16 @@ class VideoProjectService:
         return self.repo.delete(project_id)
 
     def start_workflow(self, project_id: UUID):
-        return self.repo.create_workflow(project_id)
+        return self.engine.start(project_id)
 
     def request_approval(self, project_id: UUID):
         return self.repo.update(project_id, {"status": VideoProjectStatus.awaiting_review})
 
     def approve(self, project_id: UUID):
-        return self.repo.set_approval(project_id, approved=True)
+        return self.engine.approve(project_id)
 
     def reject(self, project_id: UUID):
-        return self.repo.set_approval(project_id, approved=False)
+        return self.engine.reject(project_id)
 
     def get_events(self, project_id: UUID):
         return self.repo.get_events(project_id)
