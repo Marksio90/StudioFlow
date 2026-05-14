@@ -25,8 +25,11 @@ def list_video_projects(limit: int = 20, offset: int = 0, status: VideoProjectSt
 
 
 @router.post("", response_model=VideoProjectOut, status_code=201)
-def create_video_project(payload: VideoProjectCreate, service: VideoProjectService = Depends(get_video_project_service)):
-    return service.create_project(payload)
+def create_video_project(payload: VideoProjectCreate, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+    try:
+        return service.create_project(payload)
+    except ValueError as exc:
+        raise structured_error(409, "PLAN_PROJECT_LIMIT_REACHED", str(exc), correlation_id)
 
 
 @router.get("/{project_id}", response_model=VideoProjectOut)

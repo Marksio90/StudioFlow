@@ -6,22 +6,26 @@ from app.services.analytics_service import AnalyticsService
 from app.services.compliance_service import ComplianceInput, ComplianceService
 from app.services.workflow_engine import WorkflowEngine
 from app.services.youtube_quota_service import YouTubeCallContext, YouTubeQuotaService
+from app.services.usage_service import UsageService
 
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 
 class VideoProjectService:
-    def __init__(self, repo):
+    def __init__(self, repo, usage_service: UsageService | None = None):
         self.repo = repo
         self.engine = WorkflowEngine(repo)
         self.compliance_service = ComplianceService()
         self.analytics_service = AnalyticsService(repo)
         self.quota_service = YouTubeQuotaService(repo)
+        self.usage_service = usage_service or UsageService(repo)
 
     def list_projects(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         return self.repo.list(limit=limit, offset=offset, status=status, channel_id=channel_id, workspace_id=workspace_id)
 
     def create_project(self, payload: VideoProjectCreate):
+        self.usage_service.assert_can_create_project(payload.organization_id)
+        self.repo.register_channel(payload.organization_id, payload.channel_id)
         return self.repo.create(payload.model_dump())
 
     def get_project(self, project_id: UUID):
