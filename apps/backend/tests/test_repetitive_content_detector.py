@@ -50,3 +50,14 @@ def test_medium_or_low_for_same_topic_but_different_angle_structure():
     result = detector.detect(current, [old])
     assert result.overall_similarity < 0.8
     assert result.risk_level in {"low", "medium"}
+
+
+
+def test_empty_titles_and_hooks_do_not_add_penalty():
+    detector = RepetitiveContentDetector()
+    current = ProjectContent(project_id="new", topic="x")
+    old = ProjectContent(project_id="old", topic="x")
+
+    penalty = detector._heuristic_penalty(current, old)
+
+    assert penalty == 0.0

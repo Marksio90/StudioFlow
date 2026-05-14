@@ -17,23 +17,28 @@ class ModelRouter:
     }
 
     AGENT_TASK_ALIAS = {
-        "ResearchAgent": "research",
-        "ScriptAgent": "script_generation",
-        "SEOAgent": "seo_metadata",
-        "ComplianceAgent": "compliance",
-        "PerformanceAgent": "performance_analysis",
-        "ClassificationAgent": "classification",
-        "SummarizationAgent": "summarization",
+        "researchagent": "research",
+        "scriptagent": "script_generation",
+        "seoagent": "seo_metadata",
+        "complianceagent": "compliance",
+        "performanceagent": "performance_analysis",
+        "classificationagent": "classification",
+        "summarizationagent": "summarization",
     }
 
     def __init__(self, default_model: str | None = None) -> None:
         self.default_model = default_model or os.getenv("LLM_DEFAULT_MODEL", "gpt-4o-mini")
 
     def resolve(self, *, task_type: str) -> str:
-        normalized_task = self.AGENT_TASK_ALIAS.get(task_type, task_type)
+        normalized_task = self._normalize_task_type(task_type)
         model_env = self.TASK_MODEL_ENV_MAP.get(normalized_task)
         if model_env:
             configured_model = os.getenv(model_env)
             if configured_model:
                 return configured_model
         return self.default_model
+
+    def _normalize_task_type(self, task_type: str) -> str:
+        cleaned_task_type = task_type.strip()
+        alias_key = cleaned_task_type.lower()
+        return self.AGENT_TASK_ALIAS.get(alias_key, cleaned_task_type)

@@ -36,3 +36,23 @@ def test_agent_names_are_mapped_to_task_types(monkeypatch):
     router = ModelRouter()
 
     assert router.resolve(task_type="SEOAgent") == "seo-model"
+
+
+
+def test_task_type_whitespace_is_trimmed(monkeypatch):
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "default-model")
+    monkeypatch.setenv("LLM_SEO_MODEL", "seo-model")
+
+    router = ModelRouter()
+
+    assert router.resolve(task_type="  seo_metadata  ") == "seo-model"
+
+
+def test_agent_alias_mapping_is_case_insensitive(monkeypatch):
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "default-model")
+    monkeypatch.setenv("LLM_COMPLIANCE_MODEL", "compliance-model")
+
+    router = ModelRouter()
+
+    assert router.resolve(task_type="complianceagent") == "compliance-model"
+    assert router.resolve(task_type="ComplianceAgent") == "compliance-model"
