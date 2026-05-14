@@ -48,6 +48,30 @@ def test_workflow_e2e_scenario():
     assert rejected.json()['status'] == 'needs_changes'
 
 
+def test_compliance_can_block_approval():
+    created = client.post('/api/v1/video-projects', json=create_payload())
+    pid = created.json()['id']
+    client.post(f'/api/v1/video-projects/{pid}/start-workflow')
+
+    compliance = client.post(
+        f'/api/v1/video-projects/{pid}/compliance',
+        json={
+            "metadata": {
+                "score": 91,
+                "requires_ai_disclosure": True,
+                "copyright_risk": "high",
+            },
+            "disclosure_decision_missing": True,
+        },
+    )
+    assert compliance.status_code == 200
+    assert compliance.json()['risk_level'] == 'blocked'
+
+    approved = client.post(f'/api/v1/video-projects/{pid}/approve')
+    assert approved.status_code == 200
+    assert approved.json()['status'] == 'blocked'
+
+
 def test_crud_filters_and_openapi():
     payload = create_payload()
     created = client.post('/api/v1/video-projects', json=payload)
