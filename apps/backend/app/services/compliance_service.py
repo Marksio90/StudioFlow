@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.db.enums import ComplianceRiskLevel
+from app.services.repetitive_content_detector import ProjectContent, RepetitiveContentDetector
 
 RiskTier = Literal["low", "medium", "high"]
 
@@ -37,8 +38,12 @@ class ComplianceReport(BaseModel):
 
 
 class ComplianceService:
+    def __init__(self, repetitive_detector: RepetitiveContentDetector | None = None) -> None:
+        self.repetitive_detector = repetitive_detector or RepetitiveContentDetector()
+
     def evaluate(self, payload: ComplianceInput) -> ComplianceReport:
         m = payload.metadata
+        repetitive = self._evaluate_repetitive_content(m)
         report = ComplianceReport(
             video_project_id=payload.video_project_id,
             score=int(m.get("score", 80)),
@@ -47,14 +52,14 @@ class ComplianceService:
             disclosure_decision_missing=payload.disclosure_decision_missing,
             ai_disclosure_risk=m.get("ai_disclosure_risk", "low"),
             inauthentic_content_risk=m.get("inauthentic_content_risk", "low"),
-            repetitive_content_risk=m.get("repetitive_content_risk", "low"),
+            repetitive_content_risk=repetitive["risk_level"],
             copyright_risk=m.get("copyright_risk", "low"),
             sensitive_claims_risk=m.get("sensitive_claims_risk", "low"),
             clickbait_risk=m.get("clickbait_risk", "low"),
             asset_license_risk=m.get("asset_license_risk", "low"),
             synthetic_media_realism_risk=m.get("synthetic_media_realism_risk", "low"),
-            reasons=m.get("reasons", []),
-            recommendations=m.get("recommendations", []),
+            reasons=[*m.get("reasons", []), *repetitive["reasons"]],
+            recommendations=[*m.get("recommendations", []), *repetitive["recommendations"]],
             blocking_issues=[],
         )
         report.risk_level = self._normalize_risk_level(report.score, report.risk_level)
@@ -85,3 +90,19 @@ class ComplianceService:
         if report.requires_ai_disclosure and report.disclosure_decision_missing:
             issues.append("missing_ai_disclosure_decision")
         return issues
+
+    def _evaluate_repetitive_content(self, metadata: dict) -> dict:
+        current = metadata.get("current_project")
+        previous = metadata.get("previous_projects", [])
+        if not current:
+            risk = metadata.get("repetitive_content_risk", "low")
+            return {"risk_level": risk, "reasons": [], "recommendations": []}
+        result = self.repetitive_detector.detect(
+            ProjectContent(**current),
+            [ProjectContent(**item) for item in previous],
+        )
+        return {
+            "risk_level": result.risk_level,
+            "reasons": [f"Repetitive similarity={result.overall_similarity}", *result.reasons],
+            "recommendations": result.recommendations,
+        }
