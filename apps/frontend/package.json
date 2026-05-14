@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "generate:backend-contracts": "python3 ../backend/scripts/export_openapi.py && npm --prefix ../../packages/shared run generate:api",
-    "check:backend-contracts": "npm run generate:backend-contracts && git diff --exit-code -- ../../packages/shared/openapi/backend.openapi.json ../../packages/shared/src/backend-api.ts"
+    "check:backend-contracts": "npm run generate:backend-contracts && git diff --exit-code -- ../../packages/shared/openapi/backend.openapi.json ../../packages/shared/src/backend-api.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "next": "14.2.33",
@@ -23,6 +24,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.33",
     "typescript": "5.9.3",
-    "openapi-typescript": "^7.10.1"
+    "openapi-typescript": "^7.10.1",
+    "vitest": "^2.1.8"
   }
 }
