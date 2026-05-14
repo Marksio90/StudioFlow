@@ -92,8 +92,28 @@ class WorkflowStep(Base, UUIDMixin, TimestampMixin):
 class WorkflowEvent(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "workflow_events"
     workflow_run_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("workflow_runs.id"), nullable=False)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class TaskExecution(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "task_executions"
+    workflow_run_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("workflow_runs.id"), nullable=True, index=True)
+    task_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    business_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class TaskAttempt(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "task_attempts"
+    task_execution_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("task_executions.id"), nullable=False, index=True)
+    attempt_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class ApprovalDecision(Base, UUIDMixin, TimestampMixin):
