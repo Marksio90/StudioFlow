@@ -44,7 +44,9 @@ def _parse_api_keys_env() -> dict[str, str]:
 
 
 def get_correlation_id(x_correlation_id: str | None = Header(default=None)) -> str:
-    return x_correlation_id or str(uuid.uuid4())
+    correlation_id = x_correlation_id or str(uuid.uuid4())
+    correlation_id_var.set(correlation_id)
+    return correlation_id
 
 
 def _audit_authz(identity: Identity | None, decision: str, reason: str, correlation_id: str, action: str, resource: str) -> None:

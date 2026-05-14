@@ -3,6 +3,7 @@ import time
 from collections import defaultdict, deque
 
 from fastapi import FastAPI
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -10,6 +11,10 @@ from starlette.responses import JSONResponse
 
 from app.api.video_projects import router as video_projects_router
 from app.api.usage import router as usage_router
+from app.observability import configure_logging, correlation_id_var
+
+configure_logging()
+logger = logging.getLogger("app.request")
 
 app = FastAPI(title="AI Media Operations OS Backend")
 
@@ -41,7 +46,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if len(queue) >= self.max_requests:
             return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
         queue.append(now)
-        return await call_next(request)
+        correlation_id = request.headers.get("x-correlation-id")
+        token = correlation_id_var.set(correlation_id) if correlation_id else None
+        try:
+            response = await call_next(request)
+            logger.info("request", extra={"correlation_id": correlation_id})
+            return response
+        finally:
+            if token is not None:
+                correlation_id_var.reset(token)
 
 
 app.add_middleware(
