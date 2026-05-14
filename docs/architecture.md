@@ -1,26 +1,26 @@
-# Architecture Overview
+# Architecture
 
-## Core topology
+## Monorepo components
+- `apps/frontend` — aplikacja Next.js (UI dla zespołu).
+- `apps/backend` — FastAPI (API domenowe, workflow, compliance, usage).
+- `apps/worker` — Celery worker (zadania async, publikacja/sync).
+- `packages/shared` — miejsce na współdzielone kontrakty.
 
-- **Frontend (`apps/frontend`)**: Next.js UI shell
-- **Backend (`apps/backend`)**: FastAPI control-plane API
-- **Worker (`apps/worker`)**: Celery workers for asynchronous jobs
-- **Data stores**:
-  - PostgreSQL for durable domain data
-  - Redis for queues, cache, and ephemeral coordination
-- **Shared package (`packages/shared`)**: contracts/types between services
+## Runtime architecture
+1. Użytkownik pracuje w frontendzie i wykonuje akcje na VideoProject.
+2. Frontend wywołuje backend API (`/api/v1/video-projects/...`).
+3. Backend zapisuje stan i zdarzenia w PostgreSQL.
+4. Worker wykonuje zadania asynchroniczne (np. publish/sync).
+5. Redis pełni rolę brokera dla Celery.
 
-## Runtime orchestration
+## Kluczowe moduły backend
+- `WorkflowEngine` — inicjuje i prowadzi kroki procesu.
+- `ComplianceService` — ocena ryzyka i blokowanie publikacji.
+- `UsageService` + `PlanLimitService` — limity planów i zużycie.
+- `YouTubeQuotaService` — ledger quota per metoda API.
+- `ModelRouter` + agenci — routing modeli i tracking kosztów.
 
-Docker Compose orchestrates local environment with healthchecks for:
-- PostgreSQL
-- Redis
-- Backend (`/health`)
-- Worker (Celery inspect ping)
-
-## Principles
-
-- Modular service boundaries
-- Async-first job handling
-- Human-in-the-loop checkpoints by design
-- Cost and quota observability as first-class concerns
+## Data and governance
+- PostgreSQL przechowuje encje domenowe (projekty, workflow, decyzje, ledgery kosztów/quota, analytics).
+- Workflow emituje zdarzenia audytowe (`workflow_events`).
+- Approval decisions są trwałym logiem decyzji użytkowników.
