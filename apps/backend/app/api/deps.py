@@ -2,14 +2,15 @@ import logging
 import os
 import uuid
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
-from app.repositories.video_project_repository import DBVideoProjectRepository
+from app.observability import correlation_id_var
+from app.repositories.video_project_repository import DBVideoProjectRepository, InMemoryVideoProjectRepository
 from app.services.usage_service import UsageService
 from app.services.video_project_service import VideoProjectService
 
@@ -22,6 +23,9 @@ ROLE_MATRIX: dict[str, set[str]] = {
     "owner": {"read", "write", "manage", "owner"},
 }
 
+# Singleton in-memory repo used when DATABASE_URL is not configured (dev/unit-test mode).
+repo_singleton = InMemoryVideoProjectRepository()
+
 
 @dataclass(frozen=True)
 class Identity:
@@ -29,6 +33,7 @@ class Identity:
     org_id: UUID
     workspace_id: UUID
     role: str
+    dev_mode: bool = field(default=False)
 
 
 def _parse_api_keys_env() -> dict[str, str]:
@@ -69,6 +74,7 @@ def get_identity(
     correlation_id: str = Depends(get_correlation_id),
 ) -> Identity:
     key_roles = _parse_api_keys_env()
+    dev_mode = not key_roles
     if key_roles:
         if not x_api_key or x_api_key not in key_roles:
             _audit_authz(None, "deny", "invalid_api_key", correlation_id, "authenticate", "identity")
@@ -86,6 +92,7 @@ def get_identity(
         org_id=x_org_id or UUID("00000000-0000-0000-0000-000000000001"),
         workspace_id=x_workspace_id or UUID("00000000-0000-0000-0000-000000000001"),
         role=role,
+        dev_mode=dev_mode,
     )
     _audit_authz(identity, "allow", "authenticated", correlation_id, "authenticate", "identity")
     return identity
@@ -102,15 +109,19 @@ def require_action(action: str, resource: str):
     return dependency
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession | None, None]:
+    if not os.getenv("DATABASE_URL"):
+        yield None
+        return
     async with AsyncSessionLocal() as session:
         yield session
 
 
-def get_video_project_service(session: AsyncSession = Depends(get_db_session)) -> VideoProjectService:
-    repo = DBVideoProjectRepository(session)
-    return VideoProjectService(repo)
+def get_video_project_service(session: AsyncSession | None = Depends(get_db_session)) -> VideoProjectService:
+    repo = DBVideoProjectRepository(session) if session is not None else repo_singleton
+    return VideoProjectService(repo, usage_service=UsageService(repo))
 
 
-def get_usage_service(session: AsyncSession = Depends(get_db_session)) -> UsageService:
-    return UsageService(DBVideoProjectRepository(session))
+def get_usage_service(session: AsyncSession | None = Depends(get_db_session)) -> UsageService:
+    repo = DBVideoProjectRepository(session) if session is not None else repo_singleton
+    return UsageService(repo)

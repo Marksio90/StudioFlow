@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import uuid as _uuid
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -8,6 +10,217 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
 from app.db.models import ApprovalDecision, AnalyticsSnapshot, Channel, ComplianceReport, LLMCostLedgerEntry, Membership, Organization, PublishingPlan, TaskAttempt, TaskExecution, VideoProject, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class InMemoryVideoProjectRepository:
+    """Standalone in-memory repository for unit tests that run without a real database."""
+
+    def __init__(self) -> None:
+        self._projects: dict[UUID, dict] = {}
+        self._channels: dict[str, dict] = {}  # key: "{org_id}:{channel_id}"
+        self._plans: dict[UUID, str] = {}
+        self._approval_decisions: dict[UUID, list[dict]] = {}
+        self._compliance_reports: dict[UUID, dict] = {}
+        self._analytics: dict[UUID, list[dict]] = {}
+        self._publishing_plans: dict[UUID, dict] = {}
+        self._workflow_runs: dict[UUID, list[dict]] = {}
+        self._events: dict[UUID, list[dict]] = {}
+        self._task_executions: dict[str, object] = {}
+        self._llm_costs: dict[UUID, list[float]] = {}
+        self.youtube_quota_ledger_entries: list[dict] = []
+
+    # ── Plan management ───────────────────────────────────────────────────────
+
+    def set_plan(self, organization_id: UUID, plan_code: str) -> None:
+        self._plans[organization_id] = plan_code
+
+    async def get_plan(self, organization_id: UUID) -> str:
+        return self._plans.get(organization_id, "starter")
+
+    # ── Projects ──────────────────────────────────────────────────────────────
+
+    async def create(self, payload: dict) -> dict:
+        project = {"id": _uuid.uuid4(), "status": VideoProjectStatus.draft, "created_at": _now(), "updated_at": _now(), **payload}
+        self._projects[project["id"]] = project
+        return dict(project)
+
+    async def get(self, project_id: UUID) -> dict | None:
+        row = self._projects.get(project_id)
+        return dict(row) if row else None
+
+    async def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
+        rows = list(self._projects.values())
+        if status:
+            rows = [r for r in rows if r["status"] == status]
+        if channel_id:
+            rows = [r for r in rows if r.get("channel_id") == channel_id]
+        if workspace_id:
+            rows = [r for r in rows if r.get("workspace_id") == workspace_id]
+        return [dict(r) for r in rows[offset : offset + limit]], len(rows)
+
+    async def update(self, project_id: UUID, data: dict) -> dict:
+        row = self._projects[project_id]
+        for k, v in data.items():
+            if v is not None:
+                row[k] = v
+        row["updated_at"] = _now()
+        return dict(row)
+
+    async def update_project_status(self, project_id: UUID, status: VideoProjectStatus) -> dict:
+        return await self.update(project_id, {"status": status})
+
+    async def delete(self, project_id: UUID) -> None:
+        self._projects.pop(project_id, None)
+
+    # ── Channels ──────────────────────────────────────────────────────────────
+
+    async def register_channel(self, organization_id: UUID, channel_id: UUID) -> dict:
+        key = f"{organization_id}:{channel_id}"
+        if key not in self._channels:
+            self._channels[key] = {"organization_id": organization_id, "channel_id": channel_id, "created_at": _now()}
+        return self._channels[key]
+
+    async def register_user(self, organization_id: UUID, user_id: UUID) -> None:
+        return None
+
+    # ── Usage & plan limits ───────────────────────────────────────────────────
+
+    async def get_monthly_usage(self, organization_id: UUID, month_start: datetime) -> dict:
+        channels = sum(1 for k in self._channels if k.startswith(f"{organization_id}:"))
+        projects = sum(1 for p in self._projects.values() if p.get("organization_id") == organization_id)
+        ai_cost = sum(sum(costs) for pid, costs in self._llm_costs.items() if self._projects.get(pid, {}).get("organization_id") == organization_id)
+        quota = sum(e["quota_cost"] for e in self.youtube_quota_ledger_entries if e.get("organization_id") == organization_id)
+        return {"projects": projects, "channels": channels, "ai_cost_usd": float(ai_cost), "youtube_quota": int(quota), "users": 0}
+
+    async def create_monthly_usage_snapshot(self, payload: dict) -> dict:
+        return payload
+
+    # ── Approval decisions ────────────────────────────────────────────────────
+
+    async def add_approval_decision(self, project_id: UUID, status: ApprovalStatus, comment: str | None, decided_by_user_id: UUID) -> dict:
+        decision = {"id": _uuid.uuid4(), "video_project_id": project_id, "status": status.value, "comment": comment, "decided_by_user_id": decided_by_user_id, "created_at": _now()}
+        self._approval_decisions.setdefault(project_id, []).append(decision)
+        return decision
+
+    async def get_approval_decisions(self, project_id: UUID) -> list[dict]:
+        return list(self._approval_decisions.get(project_id, []))
+
+    # ── Compliance ────────────────────────────────────────────────────────────
+
+    async def get_compliance(self, project_id: UUID) -> dict:
+        row = self._compliance_reports.get(project_id)
+        if row:
+            return dict(row)
+        return {"video_project_id": project_id, "score": 100, "risk_level": ComplianceRiskLevel.low, "requires_ai_disclosure": False, "disclosure_decision_missing": False, "ai_disclosure_risk": "low", "inauthentic_content_risk": "low", "repetitive_content_risk": "low", "copyright_risk": "low", "sensitive_claims_risk": "low", "clickbait_risk": "low", "asset_license_risk": "low", "synthetic_media_realism_risk": "low", "reasons": [], "recommendations": [], "blocking_issues": []}
+
+    async def save_compliance_report(self, project_id: UUID, report: dict) -> dict:
+        self._compliance_reports[project_id] = {"video_project_id": project_id, **report}
+        return report
+
+    # ── Analytics ─────────────────────────────────────────────────────────────
+
+    async def create_analytics_snapshot(self, payload: dict) -> dict:
+        snap = {"id": _uuid.uuid4(), "created_at": _now(), "updated_at": _now(), **payload}
+        pid = payload.get("video_project_id")
+        self._analytics.setdefault(pid, []).append(snap)
+        p = snap.get("payload", {})
+        return {"id": snap["id"], "video_project_id": snap.get("video_project_id"), "channel_id": snap.get("channel_id"), "youtube_video_id": p.get("youtube_video_id"), "views": p.get("views"), "watch_time_minutes": p.get("watch_time_minutes"), "average_view_duration": p.get("average_view_duration"), "ctr": p.get("ctr"), "likes": p.get("likes"), "comments": p.get("comments"), "subscribers_gained": p.get("subscribers_gained"), "estimated_revenue": p.get("estimated_revenue"), "snapshot_at": p.get("snapshot_at"), "created_at": snap["created_at"], "updated_at": snap["updated_at"]}
+
+    async def get_analytics(self, project_id: UUID) -> list[dict]:
+        return [{"id": s["id"], "video_project_id": s.get("video_project_id"), "channel_id": s.get("channel_id"), "youtube_video_id": s.get("payload", {}).get("youtube_video_id"), "views": s.get("payload", {}).get("views"), "watch_time_minutes": s.get("payload", {}).get("watch_time_minutes"), "average_view_duration": s.get("payload", {}).get("average_view_duration"), "ctr": s.get("payload", {}).get("ctr"), "likes": s.get("payload", {}).get("likes"), "comments": s.get("payload", {}).get("comments"), "subscribers_gained": s.get("payload", {}).get("subscribers_gained"), "estimated_revenue": s.get("payload", {}).get("estimated_revenue"), "snapshot_at": s.get("payload", {}).get("snapshot_at"), "created_at": s["created_at"], "updated_at": s["updated_at"]} for s in self._analytics.get(project_id, [])]
+
+    # ── Publishing plans ──────────────────────────────────────────────────────
+
+    async def create_publishing_plan(self, payload: dict) -> dict:
+        plan = {"id": _uuid.uuid4(), "status": PublishingPlanStatus.draft, "youtube_video_id": None, "scheduled_at": None, "created_at": _now(), "updated_at": _now(), **payload}
+        self._publishing_plans[plan["id"]] = plan
+        return dict(plan)
+
+    async def get_publishing_plan(self, plan_id: UUID) -> dict | None:
+        row = self._publishing_plans.get(plan_id)
+        return dict(row) if row else None
+
+    async def update_publishing_plan(self, plan_id: UUID, data: dict) -> dict:
+        row = self._publishing_plans[plan_id]
+        for k, v in data.items():
+            if v is not None:
+                row[k] = v
+        row["updated_at"] = _now()
+        return dict(row)
+
+    # ── Workflow ──────────────────────────────────────────────────────────────
+
+    async def create_workflow_run(self, video_project_id: UUID) -> dict:
+        run = {"id": _uuid.uuid4(), "video_project_id": video_project_id, "state": "running", "created_at": _now()}
+        self._workflow_runs.setdefault(video_project_id, []).append(run)
+        return dict(run)
+
+    async def get_latest_workflow_run(self, video_project_id: UUID) -> dict | None:
+        runs = self._workflow_runs.get(video_project_id, [])
+        return dict(runs[-1]) if runs else None
+
+    async def create_workflow_step(self, workflow_run_id: UUID, video_project_id: UUID, step_name: str, status: str, attempt: int, idempotency_key: str, input_json: dict) -> dict:
+        return {"id": _uuid.uuid4(), "step_name": step_name, "status": status}
+
+    async def append_event(self, video_project_id: UUID, event: dict) -> None:
+        self._events.setdefault(video_project_id, []).append({**event, "id": _uuid.uuid4(), "created_at": _now()})
+
+    async def get_events(self, project_id: UUID) -> list[dict]:
+        return [{"id": e["id"], "workflow_run_id": e.get("workflow_run_id"), "event_type": e["event_type"], "payload": e.get("payload", {}), "created_at": e["created_at"]} for e in self._events.get(project_id, [])]
+
+    # ── Task execution tracking ───────────────────────────────────────────────
+
+    async def get_or_create_task_execution(self, task_name: str, business_key: str, idempotency_key: str, workflow_run_id: UUID | None = None) -> object:
+        if business_key not in self._task_executions:
+            class _Exec:
+                pass
+            ex = _Exec()
+            ex.id = _uuid.uuid4()  # type: ignore[attr-defined]
+            ex.status = "pending"  # type: ignore[attr-defined]
+            ex.retry_count = 0  # type: ignore[attr-defined]
+            self._task_executions[business_key] = ex
+        return self._task_executions[business_key]
+
+    async def mark_task_execution(self, execution_id: UUID, status: str, retry_count: int, error_code: str | None = None) -> object:
+        for ex in self._task_executions.values():
+            if ex.id == execution_id:  # type: ignore[attr-defined]
+                ex.status = status  # type: ignore[attr-defined]
+                ex.retry_count = retry_count  # type: ignore[attr-defined]
+                ex.error_code = error_code  # type: ignore[attr-defined]
+                return ex
+        return None  # type: ignore[return-value]
+
+    async def add_task_attempt(self, execution_id: UUID, attempt_no: int, status: str, error_code: str | None = None) -> object:
+        return None  # type: ignore[return-value]
+
+    # ── LLM cost tracking ─────────────────────────────────────────────────────
+
+    async def log_llm_call(self, project_id: UUID, call: dict) -> None:
+        return None
+
+    async def log_llm_cost_entry(self, project_id: UUID, entry: dict) -> None:
+        self._llm_costs.setdefault(project_id, []).append(entry.get("cost_usd", 0.0))
+
+    async def get_costs(self, project_id: UUID) -> dict:
+        total = sum(self._llm_costs.get(project_id, []))
+        return {"video_project_id": project_id, "total_cost_usd": round(total, 8)}
+
+    # ── YouTube quota tracking ────────────────────────────────────────────────
+
+    async def log_youtube_quota_entry(self, entry: dict) -> dict:
+        self.youtube_quota_ledger_entries.append(entry)
+        return entry
+
+    async def get_quota(self, project_id: UUID) -> dict:
+        project = await self.get(project_id)
+        project_total = sum(e["quota_cost"] for e in self.youtube_quota_ledger_entries if e.get("video_project_id") == project_id)
+        channel_id = project["channel_id"] if project else None
+        channel_total = sum(e["quota_cost"] for e in self.youtube_quota_ledger_entries if e.get("channel_id") == channel_id) if channel_id else 0
+        return {"video_project_id": project_id, "project_quota_cost": int(project_total), "channel_quota_cost": int(channel_total)}
 
 
 class DBVideoProjectRepository:
@@ -167,4 +380,3 @@ class DBVideoProjectRepository:
         return {"projects":int(projects or 0),"channels":int(channels or 0),"ai_cost_usd":float(ai_cost or 0.0),"youtube_quota":int(quota or 0),"users":int(users or 0)}
     async def create_monthly_usage_snapshot(self, payload: dict): return payload
 
-InMemoryVideoProjectRepository = DBVideoProjectRepository

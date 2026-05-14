@@ -4,30 +4,32 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.api.deps import get_db_session
+from app.api.deps import get_usage_service, get_video_project_service
 from app.main import app
+from app.repositories.video_project_repository import InMemoryVideoProjectRepository
+from app.services.usage_service import UsageService
+from app.services.video_project_service import VideoProjectService
 
 
 @pytest.fixture
 def client():
     os.environ["AUTH_API_KEYS"] = "editor-key:editor,viewer-key:viewer"
-    engine = create_async_engine("postgresql+asyncpg://ai_media_ops:ai_media_ops@postgres:5432/ai_media_ops", future=True)
-    SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    async def override_get_db_session():
-        async with SessionLocal() as session:
-            trans = await session.begin()
-            try:
-                yield session
-            finally:
-                await trans.rollback()
+    test_repo = InMemoryVideoProjectRepository()
 
-    app.dependency_overrides[get_db_session] = override_get_db_session
+    def override_service():
+        return VideoProjectService(test_repo, usage_service=UsageService(test_repo))
+
+    def override_usage():
+        return UsageService(test_repo)
+
+    app.dependency_overrides[get_video_project_service] = override_service
+    app.dependency_overrides[get_usage_service] = override_usage
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    os.environ.pop("AUTH_API_KEYS", None)
 
 
 def create_payload():

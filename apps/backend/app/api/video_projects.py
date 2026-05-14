@@ -14,7 +14,7 @@ async def _require_project(service: VideoProjectService, project_id: UUID, cid: 
     row = await service.get_project(project_id)
     if not row:
         raise structured_error(404, "VIDEO_PROJECT_NOT_FOUND", "VideoProject not found", cid)
-    if row["organization_id"] != identity.org_id or row["workspace_id"] != identity.workspace_id:
+    if not identity.dev_mode and (row["organization_id"] != identity.org_id or row["workspace_id"] != identity.workspace_id):
         raise structured_error(403, "VIDEO_PROJECT_FORBIDDEN", "VideoProject does not belong to tenant", cid)
     return row
 
@@ -29,7 +29,7 @@ async def list_video_projects(limit: int = 20, offset: int = 0, status: VideoPro
 @router.post("", response_model=VideoProjectOut, status_code=201)
 async def create_video_project(payload: VideoProjectCreate, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id), identity: Identity = Depends(require_action("write", "video-projects"))): 
     try:
-        if payload.organization_id != identity.org_id or payload.workspace_id != identity.workspace_id:
+        if not identity.dev_mode and (payload.organization_id != identity.org_id or payload.workspace_id != identity.workspace_id):
             raise structured_error(403, "VIDEO_PROJECT_FORBIDDEN", "VideoProject does not belong to tenant", correlation_id)
         return await service.create_project(payload)
     except ValueError as exc:
