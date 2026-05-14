@@ -11,6 +11,7 @@ from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStat
 class Organization(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "organizations"
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    plan_code: Mapped[str] = mapped_column(String(64), nullable=False, default="starter")
 
 
 class Workspace(Base, UUIDMixin, TimestampMixin):

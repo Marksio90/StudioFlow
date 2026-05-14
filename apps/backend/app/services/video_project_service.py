@@ -20,55 +20,55 @@ class VideoProjectService:
         self.quota_service = YouTubeQuotaService(repo)
         self.usage_service = usage_service or UsageService(repo)
 
-    def list_projects(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
-        return self.repo.list(limit=limit, offset=offset, status=status, channel_id=channel_id, workspace_id=workspace_id)
+    async def list_projects(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
+        return await self.repo.list(limit=limit, offset=offset, status=status, channel_id=channel_id, workspace_id=workspace_id)
 
-    def create_project(self, payload: VideoProjectCreate):
-        self.usage_service.assert_can_create_project(payload.organization_id)
-        self.repo.register_channel(payload.organization_id, payload.channel_id)
-        return self.repo.create(payload.model_dump())
+    async def create_project(self, payload: VideoProjectCreate):
+        await self.usage_service.assert_can_create_project(payload.organization_id)
+        await self.repo.register_channel(payload.organization_id, payload.channel_id)
+        return await self.repo.create(payload.model_dump())
 
-    def get_project(self, project_id: UUID):
-        return self.repo.get(project_id)
+    async def get_project(self, project_id: UUID):
+        return await self.repo.get(project_id)
 
-    def update_project(self, project_id: UUID, payload: VideoProjectUpdate):
-        return self.repo.update(project_id, payload.model_dump(exclude_unset=True))
+    async def update_project(self, project_id: UUID, payload: VideoProjectUpdate):
+        return await self.repo.update(project_id, payload.model_dump(exclude_unset=True))
 
-    def delete_project(self, project_id: UUID):
-        return self.repo.delete(project_id)
+    async def delete_project(self, project_id: UUID):
+        return await self.repo.delete(project_id)
 
-    def start_workflow(self, project_id: UUID):
-        return self.engine.start(project_id)
+    async def start_workflow(self, project_id: UUID):
+        return await self.engine.start(project_id)
 
-    def request_approval(self, project_id: UUID):
-        self.repo.add_approval_decision(project_id, status=ApprovalStatus.awaiting_review, comment="Approval requested", decided_by_user_id=SYSTEM_USER_ID)
-        return self.repo.update(project_id, {"status": VideoProjectStatus.awaiting_review})
+    async def request_approval(self, project_id: UUID):
+        await self.repo.add_approval_decision(project_id, status=ApprovalStatus.awaiting_review, comment="Approval requested", decided_by_user_id=SYSTEM_USER_ID)
+        return await self.repo.update(project_id, {"status": VideoProjectStatus.awaiting_review})
 
-    def approve(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
-        return self.engine.approve(project_id, comment, decided_by_user_id)
+    async def approve(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        return await self.engine.approve(project_id, comment, decided_by_user_id)
 
-    def reject(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
-        return self.engine.reject(project_id, comment, decided_by_user_id)
+    async def reject(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        return await self.engine.reject(project_id, comment, decided_by_user_id)
 
-    def needs_changes(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
-        return self.engine.needs_changes(project_id, comment, decided_by_user_id)
+    async def needs_changes(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
+        return await self.engine.needs_changes(project_id, comment, decided_by_user_id)
 
-    def get_events(self, project_id: UUID):
-        return self.repo.get_events(project_id)
+    async def get_events(self, project_id: UUID):
+        return await self.repo.get_events(project_id)
 
-    def get_approval_decisions(self, project_id: UUID):
-        return self.repo.get_approval_decisions(project_id)
+    async def get_approval_decisions(self, project_id: UUID):
+        return await self.repo.get_approval_decisions(project_id)
 
-    def get_costs(self, project_id: UUID):
-        return self.repo.get_costs(project_id)
+    async def get_costs(self, project_id: UUID):
+        return await self.repo.get_costs(project_id)
 
-    def get_quota(self, project_id: UUID):
-        return self.repo.get_quota(project_id)
+    async def get_quota(self, project_id: UUID):
+        return await self.repo.get_quota(project_id)
 
-    def get_compliance(self, project_id: UUID):
-        return self.repo.get_compliance(project_id)
+    async def get_compliance(self, project_id: UUID):
+        return await self.repo.get_compliance(project_id)
 
-    def run_compliance(self, project_id: UUID, metadata: dict | None = None, disclosure_decision_missing: bool = False):
+    async def run_compliance(self, project_id: UUID, metadata: dict | None = None, disclosure_decision_missing: bool = False):
         report = self.compliance_service.evaluate(
             ComplianceInput(
                 video_project_id=project_id,
@@ -76,42 +76,42 @@ class VideoProjectService:
                 disclosure_decision_missing=disclosure_decision_missing,
             )
         )
-        return self.repo.save_compliance_report(project_id, report.model_dump())
+        return await self.repo.save_compliance_report(project_id, report.model_dump())
 
-    def get_analytics(self, project_id: UUID):
-        return self.analytics_service.list_project_analytics(project_id)
+    async def get_analytics(self, project_id: UUID):
+        return await self.analytics_service.list_project_analytics(project_id)
 
-    def create_analytics_snapshot(self, project_id: UUID, payload: dict):
-        return self.analytics_service.save_snapshot(project_id, payload)
+    async def create_analytics_snapshot(self, project_id: UUID, payload: dict):
+        return await self.analytics_service.save_snapshot(project_id, payload)
 
-    def create_publishing_plan(self, payload: dict):
-        return self.repo.create_publishing_plan(payload)
+    async def create_publishing_plan(self, payload: dict):
+        return await self.repo.create_publishing_plan(payload)
 
-    def schedule_publishing(self, plan_id: UUID, scheduled_at):
-        plan = self.repo.get_publishing_plan(plan_id)
+    async def schedule_publishing(self, plan_id: UUID, scheduled_at):
+        plan = await self.repo.get_publishing_plan(plan_id)
         project_id = plan["video_project_id"]
-        decisions = self.repo.get_approval_decisions(project_id)
+        decisions = await self.repo.get_approval_decisions(project_id)
         latest_status = decisions[-1]["status"] if decisions else ApprovalStatus.awaiting_review.value
         if latest_status != ApprovalStatus.approved.value:
             raise ValueError("Project is not approved")
-        compliance = self.repo.get_compliance(project_id)
+        compliance = await self.repo.get_compliance(project_id)
         if compliance["risk_level"] == ComplianceRiskLevel.blocked:
             raise ValueError("Project is compliance blocked")
-        return self.repo.update_publishing_plan(plan_id, {"scheduled_at": scheduled_at, "status": PublishingPlanStatus.scheduled})
+        return await self.repo.update_publishing_plan(plan_id, {"scheduled_at": scheduled_at, "status": PublishingPlanStatus.scheduled})
 
-    def publish_video(self, plan_id: UUID):
-        plan = self.repo.get_publishing_plan(plan_id)
+    async def publish_video(self, plan_id: UUID):
+        plan = await self.repo.get_publishing_plan(plan_id)
         if plan["status"] != PublishingPlanStatus.scheduled:
             raise ValueError("Plan is not scheduled")
-        self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.uploading})
-        self.quota_service.log_call(
+        await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.uploading})
+        await self.quota_service.log_call(
             YouTubeCallContext(
-                organization_id=self.repo.get(plan["video_project_id"])["organization_id"],
-                workspace_id=self.repo.get(plan["video_project_id"])["workspace_id"],
+                organization_id=(await self.repo.get(plan["video_project_id"]))["organization_id"],
+                workspace_id=(await self.repo.get(plan["video_project_id"]))["workspace_id"],
                 channel_id=plan["channel_id"],
                 video_project_id=plan["video_project_id"],
             ),
             youtube_method="videos.insert",
             success=True,
         )
-        return self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.published, "youtube_video_id": f"yt_{plan_id.hex[:10]}"})
+        return await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.published, "youtube_video_id": f"yt_{plan_id.hex[:10]}"})
