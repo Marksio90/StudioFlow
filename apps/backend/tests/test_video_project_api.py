@@ -156,6 +156,7 @@ def test_quota_endpoint_returns_project_and_channel_aggregation():
 def test_needs_changes_and_decision_history_available():
     created = client.post('/api/v1/video-projects', json=create_payload())
     pid = created.json()['id']
+    client.post(f'/api/v1/video-projects/{pid}/start-workflow')
     client.post(f'/api/v1/video-projects/{pid}/request-approval')
 
     change = client.post(
@@ -170,8 +171,8 @@ def test_needs_changes_and_decision_history_available():
 
     history = client.get(f'/api/v1/video-projects/{pid}/approval-decisions')
     assert history.status_code == 200
-    assert len(history.json()) == 1
-    assert history.json()[0]['comment'] == 'update intro'
+    assert len(history.json()) == 2
+    assert history.json()[-1]['comment'] == 'update intro'
 
 def test_analytics_snapshot_create_and_list():
     payload = create_payload()
@@ -199,3 +200,51 @@ def test_analytics_snapshot_create_and_list():
     assert rows.status_code == 200
     assert len(rows.json()) == 1
     assert rows.json()[0]['views'] == 1234
+
+
+def test_publishing_plan_schedule_requires_approved_project():
+    payload = create_payload()
+    created = client.post('/api/v1/video-projects', json=payload)
+    pid = created.json()['id']
+    plan = client.post(
+        '/api/v1/video-projects/publishing-plans',
+        json={"video_project_id": pid, "channel_id": payload["channel_id"], "title": "T1", "description": "D", "tags": ["a"], "visibility": "private"},
+    )
+    assert plan.status_code == 201
+    schedule = client.post(f"/api/v1/video-projects/publishing-plans/{plan.json()['id']}/schedule", json={"scheduled_at": "2026-05-15T10:00:00Z"})
+    assert schedule.status_code == 409
+
+
+def test_blocked_project_cannot_be_scheduled_for_publish():
+    payload = create_payload()
+    created = client.post('/api/v1/video-projects', json=payload)
+    pid = created.json()['id']
+    client.post(f'/api/v1/video-projects/{pid}/start-workflow')
+    client.post(f'/api/v1/video-projects/{pid}/request-approval')
+    client.post(f'/api/v1/video-projects/{pid}/approve', json={'comment': 'ok', 'decided_by_user_id': str(uuid4())})
+    client.post(
+        f'/api/v1/video-projects/{pid}/compliance',
+        json={"metadata": {"score": 20, "copyright_risk": "high"}, "disclosure_decision_missing": True},
+    )
+    plan = client.post(
+        '/api/v1/video-projects/publishing-plans',
+        json={"video_project_id": pid, "channel_id": payload["channel_id"], "title": "T2", "description": "D", "tags": [], "visibility": "private"},
+    )
+    schedule = client.post(f"/api/v1/video-projects/publishing-plans/{plan.json()['id']}/schedule", json={"scheduled_at": "2026-05-15T10:00:00Z"})
+    assert schedule.status_code == 409
+
+
+def test_approved_project_can_be_scheduled():
+    payload = create_payload()
+    created = client.post('/api/v1/video-projects', json=payload)
+    pid = created.json()['id']
+    client.post(f'/api/v1/video-projects/{pid}/start-workflow')
+    client.post(f'/api/v1/video-projects/{pid}/request-approval')
+    client.post(f'/api/v1/video-projects/{pid}/approve', json={'comment': 'ok', 'decided_by_user_id': str(uuid4())})
+    plan = client.post(
+        '/api/v1/video-projects/publishing-plans',
+        json={"video_project_id": pid, "channel_id": payload["channel_id"], "title": "T3", "description": "D", "tags": ["x"], "visibility": "unlisted"},
+    )
+    schedule = client.post(f"/api/v1/video-projects/publishing-plans/{plan.json()['id']}/schedule", json={"scheduled_at": "2026-05-15T10:00:00Z"})
+    assert schedule.status_code == 200
+    assert schedule.json()["status"] == "scheduled"

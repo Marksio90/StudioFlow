@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.db.enums import ComplianceRiskLevel, VideoProjectStatus
+from app.db.enums import ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
 
 
 class VideoProjectCreate(BaseModel):
@@ -105,5 +105,33 @@ class AnalyticsSnapshotIn(BaseModel):
 class AnalyticsSnapshotOut(AnalyticsSnapshotIn):
     id: UUID
     video_project_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class PublishingPlanCreate(BaseModel):
+    video_project_id: UUID
+    channel_id: UUID
+    title: str
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+    visibility: str = "private"
+
+
+class PublishingPlanSchedule(BaseModel):
+    scheduled_at: datetime
+
+
+class PublishingPlanOut(BaseModel):
+    id: UUID
+    video_project_id: UUID
+    channel_id: UUID
+    scheduled_at: datetime | None
+    status: PublishingPlanStatus
+    youtube_video_id: str | None
+    title: str
+    description: str
+    tags: list[str]
+    visibility: str
     created_at: datetime
     updated_at: datetime

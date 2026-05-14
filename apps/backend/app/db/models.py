@@ -1,9 +1,11 @@
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, String, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
-from app.db.enums import ApprovalStatus, ComplianceRiskLevel, VideoProjectStatus
+from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
 
 
 class Organization(Base, UUIDMixin, TimestampMixin):
@@ -140,7 +142,14 @@ class AnalyticsSnapshot(Base, UUIDMixin, TimestampMixin):
 class PublishingPlan(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "publishing_plans"
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
-    scheduled_for: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[PublishingPlanStatus] = mapped_column(Enum(PublishingPlanStatus), default=PublishingPlanStatus.draft, nullable=False)
+    youtube_video_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    visibility: Mapped[str] = mapped_column(String(32), nullable=False, default="private")
 
 
 class Asset(Base, UUIDMixin, TimestampMixin):
