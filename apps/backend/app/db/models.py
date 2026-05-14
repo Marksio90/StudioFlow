@@ -118,9 +118,15 @@ class LLMCostLedgerEntry(Base, UUIDMixin, TimestampMixin):
 
 class YouTubeQuotaLedgerEntry(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "youtube_quota_ledger_entries"
+    organization_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), index=True, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id"), index=True, nullable=False)
     channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
-    units: Mapped[int] = mapped_column(Integer, nullable=False)
+    workflow_run_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("workflow_runs.id"), index=True, nullable=True)
+    youtube_method: Mapped[str] = mapped_column(String(128), nullable=False)
+    quota_cost: Mapped[int] = mapped_column(Integer, nullable=False)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    retry_of_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("youtube_quota_ledger_entries.id"), nullable=True)
 
 
 class AnalyticsSnapshot(Base, UUIDMixin, TimestampMixin):
