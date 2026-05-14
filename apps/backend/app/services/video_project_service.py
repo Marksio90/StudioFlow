@@ -12,7 +12,7 @@ SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 
 class VideoProjectService:
-    def __init__(self, repo, usage_service: UsageService | None = None):
+    def __init__(self, repo: object, usage_service: UsageService | None = None):
         self.repo = repo
         self.engine = WorkflowEngine(repo)
         self.compliance_service = ComplianceService()
