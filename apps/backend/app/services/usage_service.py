@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
-
 from app.services.plan_limit_service import PlanLimitService
-
 
 @dataclass
 class MonthlyUsageSnapshot:
@@ -15,7 +13,6 @@ class MonthlyUsageSnapshot:
     youtube_quota_used: int
     users_used: int
 
-
 class UsageService:
     def __init__(self, repo, plan_limit_service: PlanLimitService | None = None) -> None:
         self.repo = repo
@@ -25,19 +22,20 @@ class UsageService:
         now = datetime.now(timezone.utc)
         return datetime(now.year, now.month, 1, tzinfo=timezone.utc)
 
-    def get_usage(self, organization_id: UUID) -> dict:
+    async def get_usage(self, organization_id: UUID) -> dict:
         month_start = self._month_start()
-        plan_code = self.repo.get_plan(organization_id)
+        plan_code = await self.repo.get_plan(organization_id)
         limits = self.plan_limit_service.get_limits(plan_code)
-        usage = self.repo.get_monthly_usage(organization_id, month_start)
+        usage = await self.repo.get_monthly_usage(organization_id, month_start)
         snapshot = MonthlyUsageSnapshot(organization_id, month_start, usage["projects"], usage["channels"], usage["ai_cost_usd"], usage["youtube_quota"], usage["users"])
-        self.repo.create_monthly_usage_snapshot(snapshot.__dict__)
+        await self.repo.create_monthly_usage_snapshot(snapshot.__dict__)
         return {"organization_id": organization_id, "plan": plan_code, "period_start": month_start, "usage": usage, "limits": limits.__dict__}
 
-    def assert_can_create_project(self, organization_id: UUID) -> None:
-        data = self.get_usage(organization_id)
+    async def assert_can_create_project(self, organization_id: UUID) -> None:
+        data = await self.get_usage(organization_id)
         self.plan_limit_service.assert_within_limit("projects", data["usage"]["projects"], data["limits"]["max_video_projects_per_month"])
 
-    def assert_can_add_channel(self, organization_id: UUID) -> None:
-        data = self.get_usage(organization_id)
+    async def assert_can_add_channel(self, organization_id: UUID) -> None:
+        data = await self.get_usage(organization_id)
         self.plan_limit_service.assert_within_limit("channels", data["usage"]["channels"], data["limits"]["max_channels"])
+
