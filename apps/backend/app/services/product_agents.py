@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.services.model_router import ModelRouter
+
 
 class AgentExecutionError(RuntimeError):
     """Raised when an agent cannot produce a valid structured output."""
@@ -63,20 +65,6 @@ class MockLLMProvider:
 
         # Echoes payload into a predictable envelope that each agent maps to schema.
         return {"agent_name": agent_name, "payload": payload, "call": self.calls}
-
-
-
-
-class ModelRouter:
-    def resolve(self, *, task_type: str) -> str:
-        mapping = {
-            "ResearchAgent": "gpt-4.1-mini",
-            "ScriptAgent": "gpt-4.1",
-            "SEOAgent": "gpt-4.1-mini",
-            "ComplianceAgent": "gpt-4.1-mini",
-            "PerformanceAgent": "gpt-4.1-mini",
-        }
-        return mapping.get(task_type, "gpt-4.1-mini")
 
 
 @dataclass
