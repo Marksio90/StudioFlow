@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Response
 from app.api.deps import get_correlation_id, get_video_project_service
 from app.api.errors import structured_error
 from app.db.enums import VideoProjectStatus
-from app.schemas.video_project import AnalyticsSnapshotIn, AnalyticsSnapshotOut, ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
+from app.schemas.video_project import AnalyticsSnapshotIn, AnalyticsSnapshotOut, ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, PublishingPlanCreate, PublishingPlanOut, PublishingPlanSchedule, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
 from app.services.video_project_service import VideoProjectService
 
 router = APIRouter(prefix="/api/v1/video-projects", tags=["video-projects"])
@@ -127,3 +127,20 @@ def analytics(project_id: UUID, service: VideoProjectService = Depends(get_video
 def create_analytics_snapshot(project_id: UUID, payload: AnalyticsSnapshotIn, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
     _require_project(service, project_id, correlation_id)
     return service.create_analytics_snapshot(project_id, payload.model_dump())
+
+
+@router.post("/publishing-plans", response_model=PublishingPlanOut, status_code=201)
+def create_publishing_plan(payload: PublishingPlanCreate, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+    _require_project(service, payload.video_project_id, correlation_id)
+    return service.create_publishing_plan(payload.model_dump())
+
+
+@router.post("/publishing-plans/{plan_id}/schedule", response_model=PublishingPlanOut)
+def schedule_publishing(plan_id: UUID, payload: PublishingPlanSchedule, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id)):
+    plan = service.repo.get_publishing_plan(plan_id)
+    if not plan:
+        raise structured_error(404, "PUBLISHING_PLAN_NOT_FOUND", "PublishingPlan not found", correlation_id)
+    try:
+        return service.schedule_publishing(plan_id, payload.scheduled_at)
+    except ValueError as exc:
+        raise structured_error(409, "PUBLISHING_PLAN_INVALID", str(exc), correlation_id)

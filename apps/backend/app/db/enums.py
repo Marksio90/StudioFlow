@@ -31,3 +31,12 @@ class ApprovalStatus(str, Enum):
     approved = "approved"
     rejected = "rejected"
     needs_changes = "needs_changes"
+
+
+class PublishingPlanStatus(str, Enum):
+    draft = "draft"
+    scheduled = "scheduled"
+    uploading = "uploading"
+    published = "published"
+    failed = "failed"
+    cancelled = "cancelled"

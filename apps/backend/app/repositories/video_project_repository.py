@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from app.db.enums import ApprovalStatus, ComplianceRiskLevel, VideoProjectStatus
+from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
 
 
 class InMemoryVideoProjectRepository:
@@ -16,6 +16,7 @@ class InMemoryVideoProjectRepository:
         self.youtube_quota_ledger_entries: list[dict] = []
         self.approval_decisions: dict[UUID, list[dict]] = {}
         self.analytics_snapshots: dict[UUID, list[dict]] = {}
+        self.publishing_plans: dict[UUID, dict] = {}
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -155,3 +156,26 @@ class InMemoryVideoProjectRepository:
 
     def get_approval_decisions(self, project_id: UUID):
         return self.approval_decisions.get(project_id, [])
+
+    def create_publishing_plan(self, payload: dict):
+        now = datetime.now(timezone.utc)
+        row = {
+            "id": uuid4(),
+            **payload,
+            "status": PublishingPlanStatus.draft,
+            "youtube_video_id": None,
+            "scheduled_at": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.publishing_plans[row["id"]] = row
+        return row
+
+    def get_publishing_plan(self, plan_id: UUID):
+        return self.publishing_plans.get(plan_id)
+
+    def update_publishing_plan(self, plan_id: UUID, data: dict):
+        row = self.publishing_plans[plan_id]
+        row.update({k: v for k, v in data.items() if v is not None})
+        row["updated_at"] = datetime.now(timezone.utc)
+        return row

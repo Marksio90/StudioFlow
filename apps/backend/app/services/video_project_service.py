@@ -1,10 +1,11 @@
 from uuid import UUID
 
-from app.db.enums import ApprovalStatus, VideoProjectStatus
+from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
 from app.schemas.video_project import VideoProjectCreate, VideoProjectUpdate
 from app.services.analytics_service import AnalyticsService
 from app.services.compliance_service import ComplianceInput, ComplianceService
 from app.services.workflow_engine import WorkflowEngine
+from app.services.youtube_quota_service import YouTubeCallContext, YouTubeQuotaService
 
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
@@ -15,6 +16,7 @@ class VideoProjectService:
         self.engine = WorkflowEngine(repo)
         self.compliance_service = ComplianceService()
         self.analytics_service = AnalyticsService(repo)
+        self.quota_service = YouTubeQuotaService(repo)
 
     def list_projects(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         return self.repo.list(limit=limit, offset=offset, status=status, channel_id=channel_id, workspace_id=workspace_id)
@@ -77,3 +79,35 @@ class VideoProjectService:
 
     def create_analytics_snapshot(self, project_id: UUID, payload: dict):
         return self.analytics_service.save_snapshot(project_id, payload)
+
+    def create_publishing_plan(self, payload: dict):
+        return self.repo.create_publishing_plan(payload)
+
+    def schedule_publishing(self, plan_id: UUID, scheduled_at):
+        plan = self.repo.get_publishing_plan(plan_id)
+        project_id = plan["video_project_id"]
+        decisions = self.repo.get_approval_decisions(project_id)
+        latest_status = decisions[-1]["status"] if decisions else ApprovalStatus.awaiting_review.value
+        if latest_status != ApprovalStatus.approved.value:
+            raise ValueError("Project is not approved")
+        compliance = self.repo.get_compliance(project_id)
+        if compliance["risk_level"] == ComplianceRiskLevel.blocked:
+            raise ValueError("Project is compliance blocked")
+        return self.repo.update_publishing_plan(plan_id, {"scheduled_at": scheduled_at, "status": PublishingPlanStatus.scheduled})
+
+    def publish_video(self, plan_id: UUID):
+        plan = self.repo.get_publishing_plan(plan_id)
+        if plan["status"] != PublishingPlanStatus.scheduled:
+            raise ValueError("Plan is not scheduled")
+        self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.uploading})
+        self.quota_service.log_call(
+            YouTubeCallContext(
+                organization_id=self.repo.get(plan["video_project_id"])["organization_id"],
+                workspace_id=self.repo.get(plan["video_project_id"])["workspace_id"],
+                channel_id=plan["channel_id"],
+                video_project_id=plan["video_project_id"],
+            ),
+            youtube_method="videos.insert",
+            success=True,
+        )
+        return self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.published, "youtube_video_id": f"yt_{plan_id.hex[:10]}"})
