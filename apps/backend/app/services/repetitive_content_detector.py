@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import math
 import re
-from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol
 
 from pydantic import BaseModel, Field
+
+SIMILARITY_WEIGHTS = {
+    "lexical": 0.30,
+    "semantic": 0.30,
+    "structural": 0.20,
+    "metadata": 0.20,
+}
 
 
 class EmbeddingsProvider(Protocol):
@@ -71,17 +77,11 @@ class RepetitiveContentDetector:
         scored: list[ScoredProject] = []
         reason_bits: list[str] = []
         for prev in previous_projects:
-            lexical = self._lexical_similarity(current, prev)
-            semantic = self._semantic_similarity(current, prev)
-            structural = self._structural_similarity(current, prev)
-            metadata = self._metadata_similarity(current, prev)
+            components = self._similarity_components(current, prev)
             penalties = self._heuristic_penalty(current, prev)
-            total = max(0.0, min(1.0, (0.30 * lexical + 0.30 * semantic + 0.20 * structural + 0.20 * metadata) + penalties))
+            total = max(0.0, min(1.0, self._weighted_similarity(components) + penalties))
             scored.append(ScoredProject(project_id=prev.project_id, score=total))
-            if lexical > 0.8:
-                reason_bits.append(f"Wysoka zgodność leksykalna z {prev.project_id}")
-            if structural > 0.8:
-                reason_bits.append(f"Wysoka zgodność struktury z {prev.project_id}")
+            reason_bits.extend(self._build_reasons(prev.project_id, components))
 
         scored.sort(key=lambda x: x.score, reverse=True)
         top = scored[:3]
@@ -96,6 +96,25 @@ class RepetitiveContentDetector:
             reasons=reasons,
             recommendations=recommendations,
         )
+
+    def _similarity_components(self, a: ProjectContent, b: ProjectContent) -> dict[str, float]:
+        return {
+            "lexical": self._lexical_similarity(a, b),
+            "semantic": self._semantic_similarity(a, b),
+            "structural": self._structural_similarity(a, b),
+            "metadata": self._metadata_similarity(a, b),
+        }
+
+    def _weighted_similarity(self, components: dict[str, float]) -> float:
+        return sum(SIMILARITY_WEIGHTS[key] * components[key] for key in SIMILARITY_WEIGHTS)
+
+    def _build_reasons(self, project_id: str, components: dict[str, float]) -> list[str]:
+        reasons: list[str] = []
+        if components["lexical"] > 0.8:
+            reasons.append(f"Wysoka zgodność leksykalna z {project_id}")
+        if components["structural"] > 0.8:
+            reasons.append(f"Wysoka zgodność struktury z {project_id}")
+        return reasons
 
     def _risk_level(self, score: float) -> str:
         if score >= 0.8:
@@ -127,9 +146,9 @@ class RepetitiveContentDetector:
 
     def _heuristic_penalty(self, a: ProjectContent, b: ProjectContent) -> float:
         penalty = 0.0
-        if a.title.lower() == b.title.lower():
+        if _equal_non_empty(a.title, b.title):
             penalty += 0.1
-        if a.hook.lower() == b.hook.lower():
+        if _equal_non_empty(a.hook, b.hook):
             penalty += 0.1
         if a.angle and b.angle and a.angle.lower() != b.angle.lower():
             penalty -= 0.1
@@ -141,6 +160,12 @@ class RepetitiveContentDetector:
         if level == "medium":
             return ["Doprecyzuj unikalny angle i przeorganizuj outline."]
         return ["Podobieństwo akceptowalne; monitoruj dalszą dywersyfikację."]
+
+
+def _equal_non_empty(a: str, b: str) -> bool:
+    a_norm = a.strip().lower()
+    b_norm = b.strip().lower()
+    return bool(a_norm and b_norm and a_norm == b_norm)
 
 
 def _tokenize(text: str) -> list[str]:
