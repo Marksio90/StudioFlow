@@ -1,0 +1,17 @@
+:root { font-family: Inter, Arial, sans-serif; color: #111827; background: #f8fafc; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #1d4ed8; text-decoration: none; }
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+.grid { display: grid; gap: 16px; }
+.grid-5 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.btn { border:1px solid #d1d5db; background:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; }
+.btn.primary { background:#1d4ed8; color:white; border-color:#1d4ed8; }
+.input, select, textarea { width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; }
+table { width:100%; border-collapse: collapse; }
+th, td { text-align:left; padding:10px; border-bottom:1px solid #e5e7eb; font-size:14px; }
+.badge { padding:4px 8px; border-radius:999px; font-size:12px; background:#e5e7eb; }
+.error { color:#b91c1c; }
+.muted { color:#6b7280; }
