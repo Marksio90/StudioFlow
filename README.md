@@ -49,3 +49,33 @@ AI Media Operations OS is a B2B/SaaS workflow platform for YouTube creators, sma
 - FastAPI responds on `/health`
 - Next.js frontend starts successfully
 - Celery worker starts and passes container healthcheck
+
+## Quality gates i testy
+
+Uruchamianie lokalne z poziomu repo:
+
+```bash
+make test
+make test-backend
+make test-frontend
+make lint
+make typecheck
+```
+
+Zakres backend (pytest):
+- testy modeli
+- testy API
+- testy workflow
+- testy compliance
+- testy LLM cost tracking
+- testy approval
+- testy quota
+
+Frontend:
+- TypeScript typecheck (`npm run typecheck`)
+- lint (`npm run lint`)
+
+CI (GitHub Actions) uruchamia:
+- backend tests
+- frontend typecheck
+- docker build
