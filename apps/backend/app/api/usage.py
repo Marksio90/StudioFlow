@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_usage_service
+from app.api.deps import get_usage_service, require_mutation_auth
 from app.api.errors import structured_error
 from app.services.usage_service import UsageService
 
@@ -15,7 +15,7 @@ def get_usage(organization_id: UUID, service: UsageService = Depends(get_usage_s
 
 
 @router.post("/{organization_id}/channels/{channel_id}")
-def register_channel(organization_id: UUID, channel_id: UUID, service: UsageService = Depends(get_usage_service)):
+def register_channel(organization_id: UUID, channel_id: UUID, service: UsageService = Depends(get_usage_service), auth: None = Depends(require_mutation_auth)):
     try:
         service.assert_can_add_channel(organization_id)
     except ValueError as exc:
