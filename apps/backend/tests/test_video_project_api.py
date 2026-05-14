@@ -87,3 +87,16 @@ def test_crud_filters_and_openapi():
 
     assert client.get('/openapi.json').status_code == 200
     assert client.delete(f'/api/v1/video-projects/{pid}').status_code == 204
+
+
+def test_costs_endpoint_returns_aggregated_llm_costs():
+    created = client.post('/api/v1/video-projects', json=create_payload())
+    pid = created.json()['id']
+    project_uuid = UUID(pid)
+
+    repo_singleton.log_llm_cost_entry(project_uuid, {"cost_usd": 0.001})
+    repo_singleton.log_llm_cost_entry(project_uuid, {"cost_usd": 0.0025})
+
+    costs = client.get(f'/api/v1/video-projects/{pid}/costs')
+    assert costs.status_code == 200
+    assert costs.json()['total_cost_usd'] == 0.0035

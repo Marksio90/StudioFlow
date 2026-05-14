@@ -11,6 +11,8 @@ class InMemoryVideoProjectRepository:
         self.workflow_steps: dict[UUID, list[dict]] = {}
         self.events: dict[UUID, list[dict]] = {}
         self.compliance_reports: dict[UUID, dict] = {}
+        self.llm_calls: dict[UUID, list[dict]] = {}
+        self.llm_cost_ledger_entries: dict[UUID, list[dict]] = {}
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -77,8 +79,15 @@ class InMemoryVideoProjectRepository:
     def get_events(self, project_id: UUID):
         return self.events.get(project_id, [])
 
+    def log_llm_call(self, project_id: UUID, call: dict):
+        self.llm_calls.setdefault(project_id, []).append(call)
+
+    def log_llm_cost_entry(self, project_id: UUID, entry: dict):
+        self.llm_cost_ledger_entries.setdefault(project_id, []).append(entry)
+
     def get_costs(self, project_id: UUID):
-        return {"video_project_id": project_id, "total_cost_usd": 0.0}
+        total = sum(item.get("cost_usd", 0.0) for item in self.llm_cost_ledger_entries.get(project_id, []))
+        return {"video_project_id": project_id, "total_cost_usd": round(total, 8)}
 
     def get_quota(self, project_id: UUID):
         return {"video_project_id": project_id, "units_used": 0}
