@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from collections import defaultdict
 from uuid import UUID, uuid4
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
@@ -17,6 +18,10 @@ class InMemoryVideoProjectRepository:
         self.approval_decisions: dict[UUID, list[dict]] = {}
         self.analytics_snapshots: dict[UUID, list[dict]] = {}
         self.publishing_plans: dict[UUID, dict] = {}
+        self.organization_plans: dict[UUID, str] = {}
+        self.organization_channels: dict[UUID, set[UUID]] = defaultdict(set)
+        self.organization_users: dict[UUID, set[UUID]] = defaultdict(set)
+        self.monthly_usage_snapshots: list[dict] = []
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -179,3 +184,32 @@ class InMemoryVideoProjectRepository:
         row.update({k: v for k, v in data.items() if v is not None})
         row["updated_at"] = datetime.now(timezone.utc)
         return row
+
+
+    def set_plan(self, organization_id: UUID, plan_code: str):
+        self.organization_plans[organization_id] = plan_code
+
+    def get_plan(self, organization_id: UUID) -> str:
+        return self.organization_plans.get(organization_id, "starter")
+
+    def register_channel(self, organization_id: UUID, channel_id: UUID):
+        self.organization_channels[organization_id].add(channel_id)
+
+    def register_user(self, organization_id: UUID, user_id: UUID):
+        self.organization_users[organization_id].add(user_id)
+
+    def get_monthly_usage(self, organization_id: UUID, month_start):
+        projects = [p for p in self.projects.values() if p["organization_id"] == organization_id and p["created_at"] >= month_start]
+        ai_cost = sum(item.get("cost_usd", 0.0) for entries in self.llm_cost_ledger_entries.values() for item in entries if self.projects.get(item.get("video_project_id"), {}).get("organization_id") == organization_id and item.get("created_at", datetime.now(timezone.utc)) >= month_start)
+        youtube_quota = sum(item.get("quota_cost", 0) for item in self.youtube_quota_ledger_entries if item.get("organization_id") == organization_id and item.get("created_at", datetime.now(timezone.utc)) >= month_start)
+        return {
+            "projects": len(projects),
+            "channels": len(self.organization_channels.get(organization_id, set())),
+            "ai_cost_usd": round(ai_cost, 8),
+            "youtube_quota": youtube_quota,
+            "users": len(self.organization_users.get(organization_id, set())),
+        }
+
+    def create_monthly_usage_snapshot(self, payload: dict):
+        self.monthly_usage_snapshots.append(payload)
+        return payload
