@@ -10,6 +10,7 @@ class InMemoryVideoProjectRepository:
         self.workflow_runs: dict[UUID, list[dict]] = {}
         self.workflow_steps: dict[UUID, list[dict]] = {}
         self.events: dict[UUID, list[dict]] = {}
+        self.compliance_reports: dict[UUID, dict] = {}
 
     def list(self, limit: int, offset: int, status: VideoProjectStatus | None, channel_id: UUID | None, workspace_id: UUID | None):
         items = list(self.projects.values())
@@ -83,7 +84,31 @@ class InMemoryVideoProjectRepository:
         return {"video_project_id": project_id, "units_used": 0}
 
     def get_compliance(self, project_id: UUID):
-        return {"risk_level": ComplianceRiskLevel.low, "findings": "No checks run yet"}
+        return self.compliance_reports.get(
+            project_id,
+            {
+                "video_project_id": project_id,
+                "score": 100,
+                "risk_level": ComplianceRiskLevel.low,
+                "requires_ai_disclosure": False,
+                "disclosure_decision_missing": False,
+                "ai_disclosure_risk": "low",
+                "inauthentic_content_risk": "low",
+                "repetitive_content_risk": "low",
+                "copyright_risk": "low",
+                "sensitive_claims_risk": "low",
+                "clickbait_risk": "low",
+                "asset_license_risk": "low",
+                "synthetic_media_realism_risk": "low",
+                "reasons": [],
+                "recommendations": [],
+                "blocking_issues": [],
+            },
+        )
+
+    def save_compliance_report(self, project_id: UUID, report: dict):
+        self.compliance_reports[project_id] = report
+        return report
 
     def get_analytics(self, project_id: UUID):
         return {"video_project_id": project_id, "views": 0, "watch_time": 0}
