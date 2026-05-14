@@ -34,8 +34,15 @@ def create_payload():
     return {"organization_id": str(uuid4()), "workspace_id": str(uuid4()), "channel_id": str(uuid4()), "title": "My Project"}
 
 
+def _tenant_headers(role_key: str = "editor-key", org_id: str | None = None, workspace_id: str | None = None):
+    return {"X-API-Key": role_key, "X-Org-Id": org_id or "00000000-0000-0000-0000-000000000001", "X-Workspace-Id": workspace_id or "00000000-0000-0000-0000-000000000001", "X-User-Id": "00000000-0000-0000-0000-000000000011"}
+
+
 def _create_project(client: TestClient):
-    res = client.post('/api/v1/video-projects', json=create_payload(), headers={"X-API-Key": "editor-key"})
+    payload = create_payload()
+    payload["organization_id"] = "00000000-0000-0000-0000-000000000001"
+    payload["workspace_id"] = "00000000-0000-0000-0000-000000000001"
+    res = client.post('/api/v1/video-projects', json=payload, headers=_tenant_headers())
     assert res.status_code == 201, res.text
     return res.json()
 
@@ -48,14 +55,14 @@ def _create_plan(client: TestClient, project: dict):
         "description": "Desc",
         "tags": ["a"],
         "visibility": "private",
-    }, headers={"X-API-Key": "editor-key"})
+    }, headers=_tenant_headers())
     assert res.status_code == 201, res.text
     return res.json()
 
 
 def test_create_and_get_project(client: TestClient):
-    created = client.post('/api/v1/video-projects', json=create_payload(), headers={"X-API-Key": "editor-key"})
-    assert created.status_code == 201
+    created = _create_project(client)
+    assert created["id"]
 
 
 def test_mutating_route_requires_auth(client: TestClient):
@@ -64,7 +71,7 @@ def test_mutating_route_requires_auth(client: TestClient):
 
 
 def test_mutating_route_forbidden_for_viewer(client: TestClient):
-    res = client.post('/api/v1/video-projects', json=create_payload(), headers={"X-API-Key": "viewer-key"})
+    res = client.post('/api/v1/video-projects', json=create_payload(), headers=_tenant_headers("viewer-key"))
     assert res.status_code == 403
 
 
@@ -80,23 +87,23 @@ def test_publish_flow_success(client: TestClient):
     project = _create_project(client)
     project_id = project["id"]
 
-    req = client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers={"X-API-Key": "editor-key"})
+    req = client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers=_tenant_headers())
     assert req.status_code == 200
 
-    approve = client.post(f'/api/v1/video-projects/{project_id}/approve', json={"comment": "ok", "decided_by_user_id": str(uuid4())}, headers={"X-API-Key": "editor-key"})
+    approve = client.post(f'/api/v1/video-projects/{project_id}/approve', json={"comment": "ok", "decided_by_user_id": str(uuid4())}, headers=_tenant_headers())
     assert approve.status_code == 200
 
-    compliance = client.post(f'/api/v1/video-projects/{project_id}/compliance', json={"metadata": {}, "disclosure_decision_missing": False}, headers={"X-API-Key": "editor-key"})
+    compliance = client.post(f'/api/v1/video-projects/{project_id}/compliance', json={"metadata": {}, "disclosure_decision_missing": False}, headers=_tenant_headers())
     assert compliance.status_code == 200
 
     plan = _create_plan(client, project)
     plan_id = plan["id"]
 
-    schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers={"X-API-Key": "editor-key"})
+    schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers=_tenant_headers())
     assert schedule.status_code == 200, schedule.text
     assert schedule.json()["status"] == "scheduled"
 
-    publish = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/publish', headers={"X-API-Key": "editor-key"})
+    publish = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/publish', headers=_tenant_headers())
     assert publish.status_code == 200, publish.text
     assert publish.json()["status"] == "published"
 
@@ -105,10 +112,22 @@ def test_publish_flow_blocked(client: TestClient):
     project = _create_project(client)
     project_id = project["id"]
 
-    client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers={"X-API-Key": "editor-key"})
-    reject = client.post(f'/api/v1/video-projects/{project_id}/reject', json={"comment": "no", "decided_by_user_id": str(uuid4())}, headers={"X-API-Key": "editor-key"})
+    client.post(f'/api/v1/video-projects/{project_id}/request-approval', headers=_tenant_headers())
+    reject = client.post(f'/api/v1/video-projects/{project_id}/reject', json={"comment": "no", "decided_by_user_id": str(uuid4())}, headers=_tenant_headers())
     assert reject.status_code == 200
 
     plan = _create_plan(client, project)
-    schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan["id"]}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers={"X-API-Key": "editor-key"})
+    schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan["id"]}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers=_tenant_headers())
     assert schedule.status_code == 409
+
+
+def test_cross_tenant_project_access_forbidden(client: TestClient):
+    project = _create_project(client)
+    res = client.get(f"/api/v1/video-projects/{project['id']}", headers=_tenant_headers(org_id=str(uuid4()), workspace_id=str(uuid4())))
+    assert res.status_code == 403
+
+
+def test_cross_tenant_usage_access_forbidden(client: TestClient):
+    org_id = "00000000-0000-0000-0000-000000000001"
+    res = client.get(f"/api/v1/usage/{org_id}", headers=_tenant_headers(org_id=str(uuid4())))
+    assert res.status_code == 403
