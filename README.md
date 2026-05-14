@@ -15,6 +15,26 @@ AI Media Operations OS is a B2B/SaaS workflow platform for YouTube creators, sma
 - AI cost control and YouTube API quota governance
 - Team collaboration and approvals
 
+## Current implementation status
+
+### Frontend (`apps/frontend`)
+
+- ✅ Next.js application starts and exposes the base UI shell.
+- ⚠️ Data persistence is currently **mocked via `localStorage`** (no production API contract enforced end-to-end).
+- ⚠️ Some views/components are in foundation mode and still rely on temporary/mock data flows.
+
+### Backend (`apps/backend`)
+
+- ✅ FastAPI service starts and exposes core routes (including healthcheck).
+- ⚠️ Repository/persistence layer currently uses an **in-memory repository mock** for selected domains.
+- ⚠️ Full production persistence hardening (migrations, transactional guarantees, operational policies) is still in progress.
+
+### Worker (`apps/worker`)
+
+- ✅ Celery worker starts and passes container healthcheck.
+- ⚠️ Background jobs include **placeholder task implementations** (stub logic for async pipelines).
+- ⚠️ Production-grade retry/idempotency and long-running workflow resilience are not fully completed.
+
 ## Monorepo layout
 
 - `apps/frontend` — Next.js app
@@ -49,6 +69,18 @@ AI Media Operations OS is a B2B/SaaS workflow platform for YouTube creators, sma
 - FastAPI responds on `/health`
 - Next.js frontend starts successfully
 - Celery worker starts and passes container healthcheck
+
+## Production-ready transition checklist
+
+- [ ] Frontend no longer relies on `localStorage` mocks for core workflows; all critical flows run against versioned backend APIs.
+- [ ] Backend in-memory repositories are replaced with durable PostgreSQL-backed implementations and covered by migration strategy.
+- [ ] Worker placeholder tasks are replaced by real pipeline tasks with explicit input/output contracts.
+- [ ] End-to-end tests cover at least one full content lifecycle (plan → generate → approve → publish).
+- [ ] Observability is enabled: structured logs, metrics, tracing, and alerting for FE/BE/worker.
+- [ ] Security baseline passes in CI: dependency scans, secret scanning, authz checks, and hardened config defaults.
+- [ ] Retry/idempotency policy is defined and validated for all async jobs.
+- [ ] Runbooks exist for incident response, rollback, and degraded-mode operations.
+- [ ] SLO/SLA targets are defined with error budgets and quota/cost guardrails.
 
 ## Quality gates i testy
 
