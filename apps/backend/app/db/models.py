@@ -175,6 +175,12 @@ class PublishingPlan(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     visibility: Mapped[str] = mapped_column(String(32), nullable=False, default="private")
+    selected_title_variant_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("title_variants.id"), nullable=True)
+    selected_thumbnail_concept_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("thumbnail_concepts.id"), nullable=True)
+    final_description_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    final_tags_snapshot: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    compliance_report_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("compliance_reports.id"), nullable=True)
+    asset_bundle_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class Asset(Base, UUIDMixin, TimestampMixin):

@@ -49,15 +49,27 @@ def _create_project(client: TestClient):
     return res.json()
 
 
-def _create_plan(client: TestClient, project: dict):
-    res = client.post('/api/v1/video-projects/publishing-plans', json={
+def _create_plan(client: TestClient, project: dict, with_package_fields: bool = False):
+    payload = {
         "video_project_id": project["id"],
         "channel_id": project["channel_id"],
         "title": "Plan title",
         "description": "Desc",
         "tags": ["a"],
         "visibility": "private",
-    }, headers=_tenant_headers())
+    }
+    if with_package_fields:
+        payload.update(
+            {
+                "selected_title_variant_id": str(uuid4()),
+                "selected_thumbnail_concept_id": str(uuid4()),
+                "final_description_snapshot": "Final description snapshot",
+                "final_tags_snapshot": ["final", "tags"],
+                "compliance_report_id": str(uuid4()),
+                "asset_bundle_metadata": {"version": "1.0", "assets": []},
+            }
+        )
+    res = client.post('/api/v1/video-projects/publishing-plans', json=payload, headers=_tenant_headers())
     assert res.status_code == 201, res.text
     return res.json()
 
@@ -98,7 +110,7 @@ def test_publish_flow_success(client: TestClient):
     compliance = client.post(f'/api/v1/video-projects/{project_id}/compliance', json={"metadata": {}, "disclosure_decision_missing": False}, headers=_tenant_headers())
     assert compliance.status_code == 200
 
-    plan = _create_plan(client, project)
+    plan = _create_plan(client, project, with_package_fields=True)
     plan_id = plan["id"]
 
     schedule = client.post(f'/api/v1/video-projects/publishing-plans/{plan_id}/schedule', json={"scheduled_at": datetime.now(timezone.utc).isoformat()}, headers=_tenant_headers())

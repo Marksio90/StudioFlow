@@ -116,6 +116,12 @@ class PublishingPlanCreate(BaseModel):
     description: str = ""
     tags: list[str] = Field(default_factory=list)
     visibility: str = "private"
+    selected_title_variant_id: UUID | None = None
+    selected_thumbnail_concept_id: UUID | None = None
+    final_description_snapshot: str | None = None
+    final_tags_snapshot: list[str] | None = None
+    compliance_report_id: UUID | None = None
+    asset_bundle_metadata: dict | None = None
 
 
 class PublishingPlanSchedule(BaseModel):
@@ -133,6 +139,12 @@ class PublishingPlanOut(BaseModel):
     description: str
     tags: list[str]
     visibility: str
+    selected_title_variant_id: UUID | None = None
+    selected_thumbnail_concept_id: UUID | None = None
+    final_description_snapshot: str | None = None
+    final_tags_snapshot: list[str] | None = None
+    compliance_report_id: UUID | None = None
+    asset_bundle_metadata: dict | None = None
     created_at: datetime
     updated_at: datetime
 

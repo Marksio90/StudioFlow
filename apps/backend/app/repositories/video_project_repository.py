@@ -137,7 +137,21 @@ class InMemoryVideoProjectRepository:
     # ── Publishing plans ──────────────────────────────────────────────────────
 
     async def create_publishing_plan(self, payload: dict) -> dict:
-        plan = {"id": _uuid.uuid4(), "status": PublishingPlanStatus.draft, "youtube_video_id": None, "scheduled_at": None, "created_at": _now(), "updated_at": _now(), **payload}
+        plan = {
+            "id": _uuid.uuid4(),
+            "status": PublishingPlanStatus.draft,
+            "youtube_video_id": None,
+            "scheduled_at": None,
+            "selected_title_variant_id": None,
+            "selected_thumbnail_concept_id": None,
+            "final_description_snapshot": None,
+            "final_tags_snapshot": None,
+            "compliance_report_id": None,
+            "asset_bundle_metadata": None,
+            "created_at": _now(),
+            "updated_at": _now(),
+            **payload,
+        }
         self._publishing_plans[plan["id"]] = plan
         return dict(plan)
 
@@ -419,7 +433,26 @@ class DBVideoProjectRepository:
         return self._publishing_plan_to_dict(row)
 
     def _publishing_plan_to_dict(self, row: PublishingPlan):
-        return {"id": row.id, "video_project_id": row.video_project_id, "channel_id": row.channel_id, "scheduled_at": row.scheduled_at, "status": row.status, "youtube_video_id": row.youtube_video_id, "title": row.title, "description": row.description, "tags": row.tags, "visibility": row.visibility, "created_at": row.created_at, "updated_at": row.updated_at}
+        return {
+            "id": row.id,
+            "video_project_id": row.video_project_id,
+            "channel_id": row.channel_id,
+            "scheduled_at": row.scheduled_at,
+            "status": row.status,
+            "youtube_video_id": row.youtube_video_id,
+            "title": row.title,
+            "description": row.description,
+            "tags": row.tags,
+            "visibility": row.visibility,
+            "selected_title_variant_id": row.selected_title_variant_id,
+            "selected_thumbnail_concept_id": row.selected_thumbnail_concept_id,
+            "final_description_snapshot": row.final_description_snapshot,
+            "final_tags_snapshot": row.final_tags_snapshot,
+            "compliance_report_id": row.compliance_report_id,
+            "asset_bundle_metadata": row.asset_bundle_metadata,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+        }
 
     async def _create_entity(self, model, payload: dict) -> dict:
         row = model(**payload)
@@ -496,4 +529,3 @@ class DBVideoProjectRepository:
         quota = await self.session.scalar(select(func.coalesce(func.sum(YouTubeQuotaLedgerEntry.quota_cost),0)).where(YouTubeQuotaLedgerEntry.organization_id==organization_id))
         return {"projects":int(projects or 0),"channels":int(channels or 0),"ai_cost_usd":float(ai_cost or 0.0),"youtube_quota":int(quota or 0),"users":int(users or 0)}
     async def create_monthly_usage_snapshot(self, payload: dict): return payload
-
