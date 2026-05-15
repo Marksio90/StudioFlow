@@ -78,7 +78,7 @@ class TrackedLLMClient:
         response = self.provider.generate(request)
         raw = response.parsed_json or {"raw_text": response.raw_text}
         latency_ms = int((perf_counter() - started) * 1000)
-        model = self.model_router.resolve(task_type=task_type)
+        llm_config = self.model_router.resolve(task_type=task_type)
         input_tokens = max(1, len(str(payload)) // 4)
         output_tokens = response.usage.output_tokens or max(1, len(str(raw)) // 4)
         est_cost = Decimal(input_tokens * 0.0000002 + output_tokens * 0.0000008).quantize(Decimal("0.00000001"))
@@ -89,7 +89,7 @@ class TrackedLLMClient:
             video_project_id=context.video_project_id,
             workflow_run_id=context.workflow_run_id,
             provider=response.provider_metadata.get("provider", "unknown"),
-            model=model,
+            model=llm_config.model,
             task_type=task_type,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
