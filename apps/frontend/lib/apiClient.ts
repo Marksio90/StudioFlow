@@ -1,4 +1,4 @@
-import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, CreateChannelInput, CreateProjectInput, ProjectStatus, UpdateChannelInput, VideoProject } from './types';
+import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
 import type { components, operations } from '../../../packages/shared/src/backend-api';
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -34,6 +34,20 @@ type BackendVideoProject = components['schemas']['VideoProjectOut'] & {
   analytics?: { estimated_ctr: number; projected_views: number };
 };
 
+
+type BackendContentIdea = {
+  id: string;
+  organization_id: string;
+  workspace_id: string;
+  channel_id: string;
+  title: string;
+  summary?: string | null;
+  content_pillar: string;
+  status: ContentIdeaStatus;
+  created_at: string;
+  updated_at: string;
+};
+
 type ListProjectsQuery = operations['list_video_projects_api_v1_video_projects_get']['parameters']['query'];
 type CreateProjectBody = operations['create_video_project_api_v1_video_projects_post']['requestBody']['content']['application/json'];
 type ApproveProjectBody = operations['approve_api_v1_video_projects__project_id__approve_post']['requestBody']['content']['application/json'];
@@ -51,6 +65,10 @@ type ApiAdapter = {
     channels: '/api/v1/channels';
     channelById: (id: string) => `/api/v1/channels/${string}`;
     channelMemory: (id: string) => `/api/v1/channels/${string}/memory`;
+    ideas: '/api/v1/content-ideas';
+    ideaById: (id: string) => `/api/v1/content-ideas/${string}`;
+    ideaStatus: (id: string) => `/api/v1/content-ideas/${string}/status`;
+  
   };
   toListProjectsQuery: (filters?: { status?: ProjectStatus; channel?: string }) => ListProjectsQuery;
   toCreateProjectBody: (input: CreateProjectInput) => CreateProjectBody;
@@ -58,12 +76,17 @@ type ApiAdapter = {
   toPatchChannelBody: (input: UpdateChannelInput) => { name?: string; youtube_channel_id?: string };
   toChannelMemoryBody: (input: ChannelMemoryInput) => BackendChannelMemoryPayload;
   toApprovalBody: (approve: boolean, note?: string) => ApproveProjectBody | RejectProjectBody;
+  toCreateIdeaBody: (input: CreateContentIdeaInput) => { organization_id: string; workspace_id: string; channel_id: string; title: string; summary?: string; content_pillar: string };
+  toUpdateIdeaBody: (input: UpdateContentIdeaInput) => { title?: string; summary?: string; content_pillar?: string };
+  toListIdeasQuery: (filters?: { status?: ContentIdeaStatus; contentPillar?: string; query?: string }) => Record<string, string | undefined>;
+
 };
 
 export const backendApiAdapter: ApiAdapter = {
   paths: {
     projects: '/api/v1/video-projects', projectById: (id) => `/api/v1/video-projects/${id}`, projectAnalytics: (id) => `/api/v1/video-projects/${id}/analytics`, projectApprove: (id) => `/api/v1/video-projects/${id}/approve`, projectReject: (id) => `/api/v1/video-projects/${id}/reject`,
-    channels: '/api/v1/channels', channelById: (id) => `/api/v1/channels/${id}`, channelMemory: (id) => `/api/v1/channels/${id}/memory`
+    channels: '/api/v1/channels', channelById: (id) => `/api/v1/channels/${id}`, channelMemory: (id) => `/api/v1/channels/${id}/memory`,
+    ideas: '/api/v1/content-ideas', ideaById: (id) => `/api/v1/content-ideas/${id}`, ideaStatus: (id) => `/api/v1/content-ideas/${id}/status`
   },
   toListProjectsQuery: (filters) => ({ status: filters?.status, channel_id: filters?.channel }),
   toCreateProjectBody: (input) => ({ title: input.title, organization_id: DEFAULT_ORGANIZATION_ID, workspace_id: DEFAULT_WORKSPACE_ID, channel_id: DEFAULT_CHANNEL_ID }),
@@ -83,7 +106,10 @@ export const backendApiAdapter: ApiAdapter = {
     worst_performing_patterns: input.worstPerformingPatterns,
     freeform_memory_notes: input.freeformMemoryNotes
   }),
-  toApprovalBody: (_approve, note) => ({ decided_by_user_id: DEFAULT_WORKSPACE_ID, comment: note ?? null })
+  toApprovalBody: (_approve, note) => ({ decided_by_user_id: DEFAULT_WORKSPACE_ID, comment: note ?? null }),
+  toCreateIdeaBody: (input) => ({ organization_id: DEFAULT_ORGANIZATION_ID, workspace_id: DEFAULT_WORKSPACE_ID, channel_id: DEFAULT_CHANNEL_ID, title: input.title, ...(input.summary ? { summary: input.summary } : {}), content_pillar: input.contentPillar }),
+  toUpdateIdeaBody: (input) => ({ ...(input.title !== undefined ? { title: input.title } : {}), ...(input.summary !== undefined ? { summary: input.summary } : {}), ...(input.contentPillar !== undefined ? { content_pillar: input.contentPillar } : {}) }),
+  toListIdeasQuery: (filters) => ({ status: filters?.status, content_pillar: filters?.contentPillar, q: filters?.query })
 };
 
 const buildApiUrl = (path: string, query?: ApiRequestOptions['query']) => {
@@ -105,20 +131,33 @@ const mapChannelDto = (dto: BackendChannel): Channel => ({
 
 const mapChannelMemory = (dto: BackendChannelMemoryOut): ChannelMemory => ({
   channelId: dto.channel_id,
-  approvedTitlePatterns: dto.memory.approved_title_patterns,
-  rejectedTitlePatterns: dto.memory.rejected_title_patterns,
-  thumbnailRules: dto.memory.thumbnail_rules,
-  bannedPhrases: dto.memory.banned_phrases,
-  preferredPhrases: dto.memory.preferred_phrases,
-  compliancePreferences: dto.memory.compliance_preferences,
-  narratorStyle: dto.memory.narrator_style,
-  visualStyle: dto.memory.visual_style,
-  audienceObjections: dto.memory.audience_objections,
-  bestPerformingPatterns: dto.memory.best_performing_patterns,
-  worstPerformingPatterns: dto.memory.worst_performing_patterns,
-  freeformMemoryNotes: dto.memory.freeform_memory_notes
+  approvedTitlePatterns: dto.memory?.approved_title_patterns ?? [],
+  rejectedTitlePatterns: dto.memory?.rejected_title_patterns ?? [],
+  thumbnailRules: dto.memory?.thumbnail_rules ?? {},
+  bannedPhrases: dto.memory?.banned_phrases ?? [],
+  preferredPhrases: dto.memory?.preferred_phrases ?? [],
+  compliancePreferences: dto.memory?.compliance_preferences ?? {},
+  narratorStyle: dto.memory?.narrator_style ?? {},
+  visualStyle: dto.memory?.visual_style ?? {},
+  audienceObjections: dto.memory?.audience_objections ?? [],
+  bestPerformingPatterns: dto.memory?.best_performing_patterns ?? [],
+  worstPerformingPatterns: dto.memory?.worst_performing_patterns ?? [],
+  freeformMemoryNotes: dto.memory?.freeform_memory_notes ?? []
 });
 
+
+const mapIdeaDto = (dto: BackendContentIdea): ContentIdea => ({
+  id: dto.id,
+  organizationId: dto.organization_id,
+  workspaceId: dto.workspace_id,
+  channelId: dto.channel_id,
+  title: dto.title,
+  summary: dto.summary ?? '',
+  contentPillar: dto.content_pillar,
+  status: dto.status,
+  createdAt: dto.created_at,
+  updatedAt: dto.updated_at
+});
 const mapProjectDto = (dto: BackendVideoProject): VideoProject => ({ id: dto.id, title: dto.title, topic: '', description: '', channel: dto.channel_id, language: '', targetAudience: '', status: dto.status, aiCostUsd: dto.ai_cost_usd ?? 0, youtubeQuotaUsed: dto.youtube_quota_used ?? 0, createdAt: dto.created_at, updatedAt: dto.updated_at, overview: dto.overview ?? '', research: dto.research ?? '', script: dto.script ?? '', seo: dto.seo ?? '', approvalNote: dto.approval_note, compliance: { score: dto.compliance?.score ?? 0, riskLevel: dto.compliance?.risk_level ?? 'low', blockingIssues: dto.compliance?.blocking_issues ?? [], recommendations: dto.compliance?.recommendations ?? [] }, workflowEvents: (dto.workflow_events ?? []).map((event) => ({ id: event.id, timestamp: new Date().toISOString(), actor: event.payload?.actor ? String(event.payload.actor) : 'system', event: event.event_type })), analytics: { estimatedCtr: dto.analytics?.estimated_ctr ?? 0, projectedViews: dto.analytics?.projected_views ?? 0 } });
 const mapAnalyticsDto = (dto: BackendAnalyticsSnapshot): AnalyticsSnapshot => ({ id: dto.id, videoProjectId: dto.video_project_id, channelId: dto.channel_id, youtubeVideoId: dto.youtube_video_id, views: dto.views, watchTimeMinutes: dto.watch_time_minutes, averageViewDuration: dto.average_view_duration, ctr: dto.ctr, likes: dto.likes, comments: dto.comments, subscribersGained: dto.subscribers_gained, estimatedRevenue: dto.estimated_revenue, snapshotAt: dto.snapshot_at });
 
@@ -153,5 +192,22 @@ export const apiClient = { buildApiUrl,
   async updateChannel(id: string, input: UpdateChannelInput, options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapChannelDto(await apiRequest<BackendChannel>(backendApiAdapter.paths.channelById(id), { method: 'PATCH', body: backendApiAdapter.toPatchChannelBody(input), onLoadingChange: options?.onLoadingChange })); },
   async deleteChannel(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) { await apiRequest<void>(backendApiAdapter.paths.channelById(id), { method: 'DELETE', onLoadingChange: options?.onLoadingChange }); },
   async getChannelMemory(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapChannelMemory(await apiRequest<BackendChannelMemoryOut>(backendApiAdapter.paths.channelMemory(id), { onLoadingChange: options?.onLoadingChange })); },
-  async updateChannelMemory(id: string, input: ChannelMemoryInput, options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapChannelMemory(await apiRequest<BackendChannelMemoryOut>(backendApiAdapter.paths.channelMemory(id), { method: 'PATCH', body: backendApiAdapter.toChannelMemoryBody(input), onLoadingChange: options?.onLoadingChange })); }
+  async updateChannelMemory(id: string, input: ChannelMemoryInput, options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapChannelMemory(await apiRequest<BackendChannelMemoryOut>(backendApiAdapter.paths.channelMemory(id), { method: 'PATCH', body: backendApiAdapter.toChannelMemoryBody(input), onLoadingChange: options?.onLoadingChange })); },
+
+  async listIdeas(filters?: { status?: ContentIdeaStatus; contentPillar?: string; query?: string; onLoadingChange?: (isLoading: boolean) => void }) {
+    const response = await apiRequest<{ items: BackendContentIdea[] }>(backendApiAdapter.paths.ideas, { query: backendApiAdapter.toListIdeasQuery(filters), onLoadingChange: filters?.onLoadingChange });
+    return response.items.map(mapIdeaDto);
+  },
+  async getIdea(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaDto(await apiRequest<BackendContentIdea>(backendApiAdapter.paths.ideaById(id), { onLoadingChange: options?.onLoadingChange }));
+  },
+  async createIdea(input: CreateContentIdeaInput, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaDto(await apiRequest<BackendContentIdea>(backendApiAdapter.paths.ideas, { method: 'POST', body: backendApiAdapter.toCreateIdeaBody(input), onLoadingChange: options?.onLoadingChange }));
+  },
+  async updateIdea(id: string, input: UpdateContentIdeaInput, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaDto(await apiRequest<BackendContentIdea>(backendApiAdapter.paths.ideaById(id), { method: 'PATCH', body: backendApiAdapter.toUpdateIdeaBody(input), onLoadingChange: options?.onLoadingChange }));
+  },
+  async updateIdeaStatus(id: string, status: ContentIdeaStatus, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaDto(await apiRequest<BackendContentIdea>(backendApiAdapter.paths.ideaStatus(id), { method: 'PATCH', body: { status }, onLoadingChange: options?.onLoadingChange }));
+  },
 };

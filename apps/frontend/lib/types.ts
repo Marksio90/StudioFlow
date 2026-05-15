@@ -4,6 +4,41 @@ export type ProjectStatus = components['schemas']['VideoProjectStatus'];
 
 export type RiskLevel = components['schemas']['ComplianceRiskLevel'];
 
+export type ContentIdeaStatus =
+  | 'ideas'
+  | 'research'
+  | 'angle_review'
+  | 'script_draft'
+  | 'compliance_review'
+  | 'ready'
+  | 'published'
+  | 'analyzed';
+
+export interface ContentIdea {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  channelId: string;
+  title: string;
+  summary: string;
+  contentPillar: string;
+  status: ContentIdeaStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContentIdeaInput {
+  title: string;
+  summary?: string;
+  contentPillar: string;
+}
+
+export interface UpdateContentIdeaInput {
+  title?: string;
+  summary?: string;
+  contentPillar?: string;
+}
+
 export interface ComplianceReport {
   score: number;
   riskLevel: RiskLevel;
