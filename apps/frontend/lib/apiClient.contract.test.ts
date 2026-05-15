@@ -148,3 +148,37 @@ it('fails fast on backend 500 errors', async () => {
     await expect(apiClient.getProject('p500')).rejects.toThrow(/HTTP 500/);
   });
 });
+
+it('maps angle API payloads including blocked approve and override reason submission path', async () => {
+  const angleDto = {
+    id: 'a1', content_idea_id: 'i1', channel_id: 'c1', video_project_id: 'p1',
+    angle: { headline: 'H', hook: 'K', summary: 'S' }, status: 'proposed', approved: false,
+    evaluation: { hook_clarity: 0.2, novelty: 0.7, audience_fit: 0.8, risk: 0.3, overall_score: 0.4, gate_passed: false, blocked_reasons: ['HOOK_TOO_WEAK'] },
+    override: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z'
+  };
+
+  vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/api/v1/ideas/i1/angles') && (!init?.method || init.method === 'GET')) {
+      return new Response(JSON.stringify([angleDto]), { status: 200 });
+    }
+    if (url.endsWith('/api/v1/ideas/i1/angles/approve') && init?.method === 'POST') {
+      return new Response(JSON.stringify({ detail: { code: 'ANGLE_APPROVAL_BLOCKED' } }), { status: 409 });
+    }
+    if (url.endsWith('/api/v1/ideas/i1/angles/override') && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body));
+      expect(body.reason).toBe('Editorial exception');
+      expect(body.angle_id).toBe('a1');
+      return new Response(JSON.stringify({ ...angleDto, approved: true, status: 'approved_override', override: { reason: 'Editorial exception', overridden_by: body.overridden_by, metadata: {}, at: '2026-01-01T00:00:00Z', rejection_reasons: ['OVERALL_SCORE_TOO_LOW'] } }), { status: 200 });
+    }
+    throw new Error(`Unhandled URL: ${url}`);
+  });
+
+  const list = await apiClient.listIdeaAngles('i1');
+  expect(list[0].evaluation?.gatePassed).toBe(false);
+
+  await expect(apiClient.approveIdeaAngle('i1', 'a1')).rejects.toThrow(/HTTP 409/);
+
+  const overridden = await apiClient.overrideIdeaAngle('i1', 'a1', 'Editorial exception');
+  expect(overridden.override?.reason).toBe('Editorial exception');
+});
