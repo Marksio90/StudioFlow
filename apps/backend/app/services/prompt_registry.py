@@ -90,6 +90,26 @@ def build_default_prompt_registry() -> PromptRegistry:
                 user_template="Analyze this channel context and notes:\n{payload_json}",
             ),
             PromptTemplate(
+                name="angle_generate",
+                version="v1",
+                system_template=(
+                    "You generate YouTube content angles. Return strict JSON only with no markdown. "
+                    "Return exactly the requested number of angles in this shape: "
+                    '{"angles":[{"headline":string,"hook":string,"summary":string,"audience":string}]}.'
+                ),
+                user_template="Generate angle candidates using this context:\n{payload_json}",
+            ),
+            PromptTemplate(
+                name="angle_evaluate",
+                version="v1",
+                system_template=(
+                    "You evaluate proposed content angles. Return strict JSON only with no markdown. "
+                    "Return one evaluation per candidate in this shape: "
+                    '{"evaluations":[{"angle_index":int,"scores":{"hook_clarity":0..1,"novelty":0..1,"audience_fit":0..1,"risk":0..1,"overall_score":0..1},"recommendation":"approve|refine|reject","rationale":string}]}.'
+                ),
+                user_template="Evaluate these candidates with full context:\n{payload_json}",
+            ),
+            PromptTemplate(
                 name="topic_research_analyze",
                 version="v1",
                 system_template=(
