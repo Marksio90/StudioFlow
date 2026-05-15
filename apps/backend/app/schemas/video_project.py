@@ -135,3 +135,53 @@ class PublishingPlanOut(BaseModel):
     visibility: str
     created_at: datetime
     updated_at: datetime
+
+
+class ChannelMemoryCreate(BaseModel):
+    channel_id: UUID
+    memory: dict
+
+
+class ProjectScopedEntityBase(BaseModel):
+    video_project_id: UUID
+    status: str | None = None
+
+
+class ResearchBriefCreate(ProjectScopedEntityBase):
+    brief: dict
+
+
+class AngleCreate(ProjectScopedEntityBase):
+    angle: dict
+
+
+class HookVariantCreate(ProjectScopedEntityBase):
+    hook: dict
+
+
+class RetentionReviewCreate(ProjectScopedEntityBase):
+    review: dict
+
+
+class VisualPlanCreate(ProjectScopedEntityBase):
+    plan: dict
+
+
+class VisualSceneCreate(ProjectScopedEntityBase):
+    scene: dict
+
+
+class AudioBriefCreate(ProjectScopedEntityBase):
+    brief: dict
+
+
+class TitleVariantCreate(ProjectScopedEntityBase):
+    title_variant: dict
+
+
+class ThumbnailConceptCreate(ProjectScopedEntityBase):
+    concept: dict
+
+
+class MonetizationPlanCreate(ProjectScopedEntityBase):
+    plan: dict

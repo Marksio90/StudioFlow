@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
-from app.db.models import ApprovalDecision, AnalyticsSnapshot, Channel, ComplianceReport, LLMCostLedgerEntry, Membership, Organization, PublishingPlan, TaskAttempt, TaskExecution, VideoProject, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
+from app.db.models import ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
 
 
 def _now() -> datetime:
@@ -27,6 +27,7 @@ class InMemoryVideoProjectRepository:
         self._compliance_reports: dict[UUID, dict] = {}
         self._analytics: dict[UUID, list[dict]] = {}
         self._publishing_plans: dict[UUID, dict] = {}
+        self._entity_rows: dict[str, list[dict]] = {}
         self._workflow_runs: dict[UUID, list[dict]] = {}
         self._events: dict[UUID, list[dict]] = {}
         self._task_executions: dict[str, object] = {}
@@ -151,6 +152,64 @@ class InMemoryVideoProjectRepository:
                 row[k] = v
         row["updated_at"] = _now()
         return dict(row)
+
+
+    async def create_channel_memory(self, payload: dict) -> dict:
+        row = {"id": _uuid.uuid4(), "created_at": _now(), "updated_at": _now(), **payload}
+        self._entity_rows.setdefault("channel_memories", []).append(row)
+        return dict(row)
+
+    async def list_channel_memories(self, channel_id: UUID) -> list[dict]:
+        rows = [r for r in self._entity_rows.get("channel_memories", []) if r.get("channel_id") == channel_id]
+        return sorted(rows, key=lambda r: r["created_at"])
+
+    async def get_channel_memory(self, memory_id: UUID) -> dict | None:
+        row = next((r for r in self._entity_rows.get("channel_memories", []) if r["id"] == memory_id), None)
+        return dict(row) if row else None
+
+    async def _create_project_entity(self, key: str, payload: dict) -> dict:
+        row = {"id": _uuid.uuid4(), "created_at": _now(), "updated_at": _now(), **payload}
+        self._entity_rows.setdefault(key, []).append(row)
+        return dict(row)
+
+    async def _list_project_entities(self, key: str, project_id: UUID) -> list[dict]:
+        rows = [r for r in self._entity_rows.get(key, []) if r.get("video_project_id") == project_id]
+        return sorted(rows, key=lambda r: r["created_at"])
+
+    async def _get_project_entity(self, key: str, entity_id: UUID) -> dict | None:
+        row = next((r for r in self._entity_rows.get(key, []) if r["id"] == entity_id), None)
+        return dict(row) if row else None
+
+    async def create_research_brief(self, payload: dict) -> dict: return await self._create_project_entity("research_briefs", payload)
+    async def list_research_briefs(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("research_briefs", project_id)
+    async def get_research_brief(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("research_briefs", entity_id)
+    async def create_angle(self, payload: dict) -> dict: return await self._create_project_entity("angles", payload)
+    async def list_angles(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("angles", project_id)
+    async def get_angle(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("angles", entity_id)
+    async def create_hook_variant(self, payload: dict) -> dict: return await self._create_project_entity("hook_variants", payload)
+    async def list_hook_variants(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("hook_variants", project_id)
+    async def get_hook_variant(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("hook_variants", entity_id)
+    async def create_retention_review(self, payload: dict) -> dict: return await self._create_project_entity("retention_reviews", payload)
+    async def list_retention_reviews(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("retention_reviews", project_id)
+    async def get_retention_review(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("retention_reviews", entity_id)
+    async def create_visual_plan(self, payload: dict) -> dict: return await self._create_project_entity("visual_plans", payload)
+    async def list_visual_plans(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("visual_plans", project_id)
+    async def get_visual_plan(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("visual_plans", entity_id)
+    async def create_visual_scene(self, payload: dict) -> dict: return await self._create_project_entity("visual_scenes", payload)
+    async def list_visual_scenes(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("visual_scenes", project_id)
+    async def get_visual_scene(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("visual_scenes", entity_id)
+    async def create_audio_brief(self, payload: dict) -> dict: return await self._create_project_entity("audio_briefs", payload)
+    async def list_audio_briefs(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("audio_briefs", project_id)
+    async def get_audio_brief(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("audio_briefs", entity_id)
+    async def create_title_variant(self, payload: dict) -> dict: return await self._create_project_entity("title_variants", payload)
+    async def list_title_variants(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("title_variants", project_id)
+    async def get_title_variant(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("title_variants", entity_id)
+    async def create_thumbnail_concept(self, payload: dict) -> dict: return await self._create_project_entity("thumbnail_concepts", payload)
+    async def list_thumbnail_concepts(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("thumbnail_concepts", project_id)
+    async def get_thumbnail_concept(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("thumbnail_concepts", entity_id)
+    async def create_monetization_plan(self, payload: dict) -> dict: return await self._create_project_entity("monetization_plans", payload)
+    async def list_monetization_plans(self, project_id: UUID) -> list[dict]: return await self._list_project_entities("monetization_plans", project_id)
+    async def get_monetization_plan(self, entity_id: UUID) -> dict | None: return await self._get_project_entity("monetization_plans", entity_id)
 
     # ── Workflow ──────────────────────────────────────────────────────────────
 
@@ -361,6 +420,64 @@ class DBVideoProjectRepository:
 
     def _publishing_plan_to_dict(self, row: PublishingPlan):
         return {"id": row.id, "video_project_id": row.video_project_id, "channel_id": row.channel_id, "scheduled_at": row.scheduled_at, "status": row.status, "youtube_video_id": row.youtube_video_id, "title": row.title, "description": row.description, "tags": row.tags, "visibility": row.visibility, "created_at": row.created_at, "updated_at": row.updated_at}
+
+    async def _create_entity(self, model, payload: dict) -> dict:
+        row = model(**payload)
+        self.session.add(row)
+        await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
+        return self._entity_to_dict(row)
+
+    async def _list_entities(self, model, project_id: UUID) -> list[dict]:
+        rows = (await self.session.scalars(select(model).where(model.video_project_id == project_id).order_by(model.created_at.asc(), model.id.asc()))).all()
+        return [self._entity_to_dict(r) for r in rows]
+
+    async def _get_entity(self, model, entity_id: UUID) -> dict | None:
+        row = await self.session.get(model, entity_id)
+        return self._entity_to_dict(row) if row else None
+
+    def _entity_to_dict(self, row):
+        data = {"id": row.id, "created_at": row.created_at, "updated_at": row.updated_at}
+        for attr in ["video_project_id", "channel_id", "status", "memory", "brief", "angle", "hook", "review", "plan", "scene", "title_variant", "concept"]:
+            if hasattr(row, attr):
+                data[attr] = getattr(row, attr)
+        return data
+
+    async def create_channel_memory(self, payload: dict) -> dict: return await self._create_entity(ChannelMemory, payload)
+    async def list_channel_memories(self, channel_id: UUID) -> list[dict]:
+        rows = (await self.session.scalars(select(ChannelMemory).where(ChannelMemory.channel_id == channel_id).order_by(ChannelMemory.created_at.asc(), ChannelMemory.id.asc()))).all()
+        return [self._entity_to_dict(r) for r in rows]
+    async def get_channel_memory(self, entity_id: UUID) -> dict | None: return await self._get_entity(ChannelMemory, entity_id)
+    async def create_research_brief(self, payload: dict) -> dict: return await self._create_entity(ResearchBrief, payload)
+    async def list_research_briefs(self, project_id: UUID) -> list[dict]: return await self._list_entities(ResearchBrief, project_id)
+    async def get_research_brief(self, entity_id: UUID) -> dict | None: return await self._get_entity(ResearchBrief, entity_id)
+    async def create_angle(self, payload: dict) -> dict: return await self._create_entity(Angle, payload)
+    async def list_angles(self, project_id: UUID) -> list[dict]: return await self._list_entities(Angle, project_id)
+    async def get_angle(self, entity_id: UUID) -> dict | None: return await self._get_entity(Angle, entity_id)
+    async def create_hook_variant(self, payload: dict) -> dict: return await self._create_entity(HookVariant, payload)
+    async def list_hook_variants(self, project_id: UUID) -> list[dict]: return await self._list_entities(HookVariant, project_id)
+    async def get_hook_variant(self, entity_id: UUID) -> dict | None: return await self._get_entity(HookVariant, entity_id)
+    async def create_retention_review(self, payload: dict) -> dict: return await self._create_entity(RetentionReview, payload)
+    async def list_retention_reviews(self, project_id: UUID) -> list[dict]: return await self._list_entities(RetentionReview, project_id)
+    async def get_retention_review(self, entity_id: UUID) -> dict | None: return await self._get_entity(RetentionReview, entity_id)
+    async def create_visual_plan(self, payload: dict) -> dict: return await self._create_entity(VisualPlan, payload)
+    async def list_visual_plans(self, project_id: UUID) -> list[dict]: return await self._list_entities(VisualPlan, project_id)
+    async def get_visual_plan(self, entity_id: UUID) -> dict | None: return await self._get_entity(VisualPlan, entity_id)
+    async def create_visual_scene(self, payload: dict) -> dict: return await self._create_entity(VisualScene, payload)
+    async def list_visual_scenes(self, project_id: UUID) -> list[dict]: return await self._list_entities(VisualScene, project_id)
+    async def get_visual_scene(self, entity_id: UUID) -> dict | None: return await self._get_entity(VisualScene, entity_id)
+    async def create_audio_brief(self, payload: dict) -> dict: return await self._create_entity(AudioBrief, payload)
+    async def list_audio_briefs(self, project_id: UUID) -> list[dict]: return await self._list_entities(AudioBrief, project_id)
+    async def get_audio_brief(self, entity_id: UUID) -> dict | None: return await self._get_entity(AudioBrief, entity_id)
+    async def create_title_variant(self, payload: dict) -> dict: return await self._create_entity(TitleVariant, payload)
+    async def list_title_variants(self, project_id: UUID) -> list[dict]: return await self._list_entities(TitleVariant, project_id)
+    async def get_title_variant(self, entity_id: UUID) -> dict | None: return await self._get_entity(TitleVariant, entity_id)
+    async def create_thumbnail_concept(self, payload: dict) -> dict: return await self._create_entity(ThumbnailConcept, payload)
+    async def list_thumbnail_concepts(self, project_id: UUID) -> list[dict]: return await self._list_entities(ThumbnailConcept, project_id)
+    async def get_thumbnail_concept(self, entity_id: UUID) -> dict | None: return await self._get_entity(ThumbnailConcept, entity_id)
+    async def create_monetization_plan(self, payload: dict) -> dict: return await self._create_entity(MonetizationPlan, payload)
+    async def list_monetization_plans(self, project_id: UUID) -> list[dict]: return await self._list_entities(MonetizationPlan, project_id)
+    async def get_monetization_plan(self, entity_id: UUID) -> dict | None: return await self._get_entity(MonetizationPlan, entity_id)
+
     async def set_plan(self, organization_id: UUID, plan_code: str):
         org = await self.session.get(Organization, organization_id)
         if org:

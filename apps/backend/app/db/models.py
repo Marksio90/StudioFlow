@@ -187,4 +187,86 @@ class AssetLicense(Base, UUIDMixin, TimestampMixin):
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class ChannelMemory(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "channel_memories"
+    channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
+    memory: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class ResearchBrief(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "research_briefs"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    brief: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class Angle(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "angles"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    angle: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class HookVariant(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "hook_variants"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    hook: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class RetentionReview(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "retention_reviews"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    review: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class VisualPlan(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "visual_plans"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    plan: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class VisualScene(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "visual_scenes"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    scene: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class AudioBrief(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "audio_briefs"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    brief: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class TitleVariant(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "title_variants"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    title_variant: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class ThumbnailConcept(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "thumbnail_concepts"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    concept: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class MonetizationPlan(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "monetization_plans"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
+    plan: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
 Index("ix_video_projects_org_workspace_channel", VideoProject.organization_id, VideoProject.workspace_id, VideoProject.channel_id)
+Index("ix_channel_memories_channel_created_at", ChannelMemory.channel_id, ChannelMemory.created_at)
+Index("ix_research_briefs_project_created_at", ResearchBrief.video_project_id, ResearchBrief.created_at)
+Index("ix_angles_project_created_at", Angle.video_project_id, Angle.created_at)
+Index("ix_hook_variants_project_created_at", HookVariant.video_project_id, HookVariant.created_at)
+Index("ix_retention_reviews_project_created_at", RetentionReview.video_project_id, RetentionReview.created_at)
+Index("ix_visual_plans_project_created_at", VisualPlan.video_project_id, VisualPlan.created_at)
+Index("ix_visual_scenes_project_created_at", VisualScene.video_project_id, VisualScene.created_at)
+Index("ix_audio_briefs_project_created_at", AudioBrief.video_project_id, AudioBrief.created_at)
+Index("ix_title_variants_project_created_at", TitleVariant.video_project_id, TitleVariant.created_at)
+Index("ix_thumbnail_concepts_project_created_at", ThumbnailConcept.video_project_id, ThumbnailConcept.created_at)
+Index("ix_monetization_plans_project_created_at", MonetizationPlan.video_project_id, MonetizationPlan.created_at)
