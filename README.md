@@ -2,88 +2,28 @@
 
 **Slogan:** *Create better YouTube videos with AI — not more spam.*
 
-QualityTube OS is an **AI-assisted, human-approved, compliance-aware YouTube content operations system** for creators, teams, and agencies that want better content quality, stronger editorial control, and lower policy risk.
+QualityTube OS is an **AI-assisted, human-approved, compliance-aware YouTube content operations system** for partners, agencies, and creator teams that prioritize editorial quality, operational consistency, and policy safety.
 
-## Product name
+## Current implementation status
 
-QualityTube OS
+QualityTube OS is currently implemented as an MVP-oriented operations stack that supports a full assisted workflow from planning through publication, with mandatory human decision points and baseline policy controls.
 
-## Short product description
+## MVP boundary
 
-QualityTube OS is an operations layer for research, scripting, review, publishing workflows, and analytics feedback in YouTube production environments where quality, originality, and policy compliance matter.
+The MVP is intentionally constrained to high-value workflow orchestration, review controls, and performance feedback. It is not a growth-hacking engine, not an autonomous content farm, and not a substitute for editorial leadership.
 
-## Core philosophy
+## Quickstart
 
-- AI accelerates execution, but humans own editorial decisions.
-- Compliance is a first-class product requirement, not a post-processing step.
-- Quality beats volume: repeatable systems should improve output standards, not flood platforms with low-value content.
+Run from repository root:
 
-## What the system does
-
-- Supports structured planning and workflow orchestration.
-- Provides AI-assisted research and script generation with mandatory human checkpoints.
-- Enforces SEO and compliance review stages before publication.
-- Coordinates publishing/scheduling pipelines.
-- Tracks performance analytics and feeds insights back into planning.
-- Monitors AI usage cost and YouTube API quota consumption.
-- Enables team collaboration, ownership, and approval flows.
-
-## What the system explicitly does not do
-
-- Does not promise monetization outcomes.
-- Does not automate channel growth without human work.
-- Does not provide one-click, no-review mass content publishing.
-- Does not position itself as a passive-income or “cash machine” tool.
-
-## Target users
-
-- YouTube creators with repeatable production workflows.
-- Small in-house media teams.
-- Content agencies operating multi-channel pipelines.
-- Operators who need auditability, quality controls, and role-based approvals.
-
-## Core modules
-
-- Planning and briefing
-- Research and script generation
-- Compliance and quality review
-- Approval workflow and sign-off
-- Publishing/scheduling orchestration
-- Analytics and feedback loop
-- Cost/quota governance
-
-## MVP scope
-
-- End-to-end assisted pipeline for plan → draft → review → approve → publish.
-- Baseline compliance checkpoints for YouTube policy-sensitive areas.
-- Human approval requirements before publication.
-- Analytics ingestion and basic performance feedback into future planning.
-
-## Architecture overview
-
-- `apps/frontend` — Next.js operator interface
-- `apps/backend` — FastAPI orchestration and policy services
-- `apps/worker` — Celery async task execution
-- `packages/shared` — shared contracts/types placeholder
-- `infra` — infrastructure scripts
-- `docs` — product, compliance, and architecture documentation
-
-## Local development quickstart
-
-1. Copy environment:
+1. Copy environment variables:
    ```bash
    cp .env.example .env
    ```
-2. Build and start:
+2. Build and start all services:
    ```bash
    docker compose up --build
    ```
-
-## Environment variables overview
-
-- Local configuration is managed via `.env` (copied from `.env.example`).
-- Variables configure frontend/backend runtime behavior, infrastructure endpoints, API credentials, and local feature settings.
-- Treat secrets as sensitive and never commit secret values.
 
 ## Services
 
@@ -93,7 +33,13 @@ QualityTube OS is an operations layer for research, scripting, review, publishin
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
 
-## Testing commands
+## Environment variables
+
+- Local configuration is managed through `.env` (copied from `.env.example`).
+- Variables cover frontend/backend runtime behavior, infrastructure endpoints, API credentials, and local feature flags.
+- Treat all secrets as sensitive and never commit secret values.
+
+## Testing and quality checks
 
 Run from repository root:
 
@@ -114,7 +60,7 @@ Backend coverage focus (pytest):
 - approval tests
 - quota tests
 
-Frontend checks:
+Frontend quality checks:
 - TypeScript typecheck (`npm run typecheck`)
 - lint (`npm run lint`)
 
@@ -126,22 +72,40 @@ CI (GitHub Actions) runs:
 - security checks (`pip-audit`, `npm audit --omit=dev`)
 - docker build
 
-## Compliance-first philosophy
+## Architecture summary
 
-QualityTube OS is designed around policy-aware operations. Compliance checks are embedded into workflow stages so content is reviewed before publication decisions, not after incidents.
+- `apps/frontend` — Next.js operator interface
+- `apps/backend` — FastAPI orchestration and policy services
+- `apps/worker` — Celery async task execution
+- `packages/shared` — shared contracts/types placeholder
+- `infra` — infrastructure scripts
+- `docs` — product, compliance, and architecture documentation
 
-## Human approval workflow
+## Compliance and approval workflow
 
-AI outputs are drafts, not final artifacts. Human reviewers must approve publish-ready assets and can reject, request revision, or escalate policy concerns.
+### Compliance model
 
-## Quality gates
+- Compliance is a first-class product requirement, not post-processing.
+- Policy-aware checks are embedded in workflow stages before publication decisions.
+- Quality gates enforce minimum standards for originality, factual quality, policy risk, and metadata packaging.
 
-Quality gates enforce minimum standards for:
-- originality and transformation value
-- factual and editorial quality
-- policy/compliance risk
-- metadata and packaging quality
+### Human approval model
 
-## Analytics feedback loop
+- AI outputs are draft assets only.
+- Human reviewers own final editorial and publication decisions.
+- Reviewers can approve, reject, request revisions, or escalate policy concerns.
 
-Post-publication performance is used to refine briefs, scripting standards, packaging decisions, and workflow templates. The goal is continuous quality improvement over repeated production cycles.
+### Performance feedback loop
+
+- Post-publication analytics feed back into briefing, scripting standards, packaging choices, and workflow templates.
+- The operating objective is sustained quality improvement across repeated production cycles.
+
+## Explicit platform and monetization disclaimers
+
+QualityTube OS explicitly rejects the following positioning and use cases:
+
+- Spam automation or mass low-value content production.
+- Passive-income promises or “set-and-forget” channel automation narratives.
+- Guaranteed monetization, guaranteed growth, or guaranteed revenue claims.
+
+The system is designed for disciplined teams that combine AI leverage with accountable human judgment.
