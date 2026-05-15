@@ -5,8 +5,8 @@ from sqlalchemy import func, select
 
 from app.api.deps import Identity, get_correlation_id, get_db_session, repo_singleton, require_action
 from app.api.errors import structured_error
-from app.db.models import Channel
-from app.schemas.channel import ChannelCreate, ChannelOut, ChannelUpdate, PaginatedChannels
+from app.db.models import Channel, ChannelMemory
+from app.schemas.channel import ChannelCreate, ChannelMemoryOut, ChannelMemoryPayload, ChannelOut, ChannelUpdate, PaginatedChannels
 
 router = APIRouter(prefix="/api/v1/channels", tags=["channels"])
 
@@ -164,3 +164,67 @@ async def delete_channel(
     await session.delete(entity)
     await session.commit()
     return Response(status_code=204)
+
+
+@router.get("/{channel_id}/memory", response_model=ChannelMemoryOut)
+async def get_channel_memory(
+    channel_id: UUID,
+    correlation_id: str = Depends(get_correlation_id),
+    session=Depends(get_db_session),
+    identity: Identity = Depends(require_action("read", "channels")),
+):
+    await _get_channel(channel_id, correlation_id, identity, session)
+
+    if session is None:
+        rows = [r for r in repo_singleton._entity_rows.get("channel_memories", []) if r.get("channel_id") == channel_id]
+        row = sorted(rows, key=lambda r: (r.get("created_at"), r.get("id")))[-1] if rows else None
+    else:
+        result = await session.execute(
+            select(ChannelMemory).where(ChannelMemory.channel_id == channel_id).order_by(ChannelMemory.created_at.desc(), ChannelMemory.id.desc())
+        )
+        row = result.scalars().first()
+
+    memory = ChannelMemoryPayload(**(row["memory"] if isinstance(row, dict) else (row.memory if row else {})))
+    return {"channel_id": channel_id, "memory": memory}
+
+
+@router.patch("/{channel_id}/memory", response_model=ChannelMemoryOut)
+async def patch_channel_memory(
+    channel_id: UUID,
+    payload: ChannelMemoryPayload,
+    correlation_id: str = Depends(get_correlation_id),
+    session=Depends(get_db_session),
+    identity: Identity = Depends(require_action("write", "channels")),
+):
+    await _get_channel(channel_id, correlation_id, identity, session)
+    normalized_memory = payload.model_dump()
+
+    if session is None:
+        rows = repo_singleton._entity_rows.setdefault("channel_memories", [])
+        existing = [r for r in rows if r.get("channel_id") == channel_id]
+        if existing:
+            row = sorted(existing, key=lambda r: (r.get("created_at"), r.get("id")))[-1]
+            from datetime import datetime, timezone
+
+            row["memory"] = normalized_memory
+            row["updated_at"] = datetime.now(timezone.utc)
+        else:
+            from datetime import datetime, timezone
+            import uuid as _uuid
+
+            now = datetime.now(timezone.utc)
+            row = {"id": _uuid.uuid4(), "channel_id": channel_id, "memory": normalized_memory, "created_at": now, "updated_at": now}
+            rows.append(row)
+    else:
+        result = await session.execute(
+            select(ChannelMemory).where(ChannelMemory.channel_id == channel_id).order_by(ChannelMemory.created_at.desc(), ChannelMemory.id.desc())
+        )
+        entity = result.scalars().first()
+        if entity is None:
+            entity = ChannelMemory(channel_id=channel_id, memory=normalized_memory)
+            session.add(entity)
+        else:
+            entity.memory = normalized_memory
+        await session.commit()
+
+    return {"channel_id": channel_id, "memory": ChannelMemoryPayload(**normalized_memory)}
