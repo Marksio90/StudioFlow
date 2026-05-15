@@ -1,4 +1,4 @@
-import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, IdeaResearchRecommendation, IdeaResearchReport, NicheReport, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
+import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, IdeaAngle, IdeaResearchRecommendation, IdeaResearchReport, NicheReport, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
 import type { components, operations } from '../../../packages/shared/src/backend-api';
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -74,6 +74,11 @@ type ApiAdapter = {
     ideaResearchAnalyze: (id: string) => `/api/v1/content-ideas/${string}/research/analyze`;
     ideaResearchLatest: (id: string) => `/api/v1/content-ideas/${string}/research/latest`;
     ideaResearchReports: (id: string) => `/api/v1/content-ideas/${string}/research/reports`;
+    ideaAngles: (id: string) => `/api/v1/ideas/${string}/angles`;
+    ideaAnglesGenerate: (id: string) => `/api/v1/ideas/${string}/angles/generate`;
+    ideaAnglesEvaluate: (id: string) => `/api/v1/ideas/${string}/angles/evaluate`;
+    ideaAnglesApprove: (id: string) => `/api/v1/ideas/${string}/angles/approve`;
+    ideaAnglesOverride: (id: string) => `/api/v1/ideas/${string}/angles/override`;
   };
   toListProjectsQuery: (filters?: { status?: ProjectStatus; channel?: string }) => ListProjectsQuery;
   toCreateProjectBody: (input: CreateProjectInput) => CreateProjectBody;
@@ -91,7 +96,8 @@ export const backendApiAdapter: ApiAdapter = {
   paths: {
     projects: '/api/v1/video-projects', projectById: (id) => `/api/v1/video-projects/${id}`, projectAnalytics: (id) => `/api/v1/video-projects/${id}/analytics`, projectApprove: (id) => `/api/v1/video-projects/${id}/approve`, projectReject: (id) => `/api/v1/video-projects/${id}/reject`,
     channels: '/api/v1/channels', channelById: (id) => `/api/v1/channels/${id}`, channelMemory: (id) => `/api/v1/channels/${id}/memory`, nicheAnalyze: (id) => `/api/v1/channels/${id}/niche/analyze`, nicheReports: (id) => `/api/v1/channels/${id}/niche/reports`, nicheReportById: (id, reportId) => `/api/v1/channels/${id}/niche/reports/${reportId}`,
-    ideas: '/api/v1/content-ideas', ideaById: (id) => `/api/v1/content-ideas/${id}`, ideaStatus: (id) => `/api/v1/content-ideas/${id}/status`, ideaResearchAnalyze: (id) => `/api/v1/content-ideas/${id}/research/analyze`, ideaResearchLatest: (id) => `/api/v1/content-ideas/${id}/research/latest`, ideaResearchReports: (id) => `/api/v1/content-ideas/${id}/research/reports`
+    ideas: '/api/v1/content-ideas', ideaById: (id) => `/api/v1/content-ideas/${id}`, ideaStatus: (id) => `/api/v1/content-ideas/${id}/status`, ideaResearchAnalyze: (id) => `/api/v1/content-ideas/${id}/research/analyze`, ideaResearchLatest: (id) => `/api/v1/content-ideas/${id}/research/latest`, ideaResearchReports: (id) => `/api/v1/content-ideas/${id}/research/reports`,
+    ideaAngles: (id) => `/api/v1/ideas/${id}/angles`, ideaAnglesGenerate: (id) => `/api/v1/ideas/${id}/angles/generate`, ideaAnglesEvaluate: (id) => `/api/v1/ideas/${id}/angles/evaluate`, ideaAnglesApprove: (id) => `/api/v1/ideas/${id}/angles/approve`, ideaAnglesOverride: (id) => `/api/v1/ideas/${id}/angles/override`
   },
   toListProjectsQuery: (filters) => ({ status: filters?.status, channel_id: filters?.channel }),
   toCreateProjectBody: (input) => ({ title: input.title, organization_id: DEFAULT_ORGANIZATION_ID, workspace_id: DEFAULT_WORKSPACE_ID, channel_id: DEFAULT_CHANNEL_ID }),
@@ -180,6 +186,33 @@ const mapIdeaResearchReport = (dto: any): IdeaResearchReport => ({
   recommendedNextAction: dto.recommended_next_action ?? '',
   createdAt: dto.created_at
 });
+const mapIdeaAngle = (dto: any): IdeaAngle => ({
+  id: dto.id,
+  contentIdeaId: dto.content_idea_id,
+  channelId: dto.channel_id,
+  videoProjectId: dto.video_project_id,
+  angle: dto.angle ?? {},
+  status: dto.status ?? 'proposed',
+  evaluation: dto.evaluation ? {
+    hookClarity: dto.evaluation.hook_clarity ?? 0,
+    novelty: dto.evaluation.novelty ?? 0,
+    audienceFit: dto.evaluation.audience_fit ?? 0,
+    risk: dto.evaluation.risk ?? 0,
+    overallScore: dto.evaluation.overall_score ?? 0,
+    gatePassed: Boolean(dto.evaluation.gate_passed),
+    blockedReasons: dto.evaluation.blocked_reasons ?? []
+  } : null,
+  approved: Boolean(dto.approved),
+  override: dto.override ? {
+    reason: dto.override.reason ?? '',
+    overriddenBy: dto.override.overridden_by ?? '',
+    metadata: dto.override.metadata ?? {},
+    at: dto.override.at ?? '',
+    rejectionReasons: dto.override.rejection_reasons ?? []
+  } : null,
+  createdAt: dto.created_at,
+  updatedAt: dto.updated_at
+});
 const mapAnalyticsDto = (dto: BackendAnalyticsSnapshot): AnalyticsSnapshot => ({ id: dto.id, videoProjectId: dto.video_project_id, channelId: dto.channel_id, youtubeVideoId: dto.youtube_video_id, views: dto.views, watchTimeMinutes: dto.watch_time_minutes, averageViewDuration: dto.average_view_duration, ctr: dto.ctr, likes: dto.likes, comments: dto.comments, subscribersGained: dto.subscribers_gained, estimatedRevenue: dto.estimated_revenue, snapshotAt: dto.snapshot_at });
 
 async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> { /* unchanged */
@@ -243,6 +276,23 @@ export const apiClient = { buildApiUrl,
   async listIdeaResearchReports(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
     const response = await apiRequest<{ items: any[] }>(backendApiAdapter.paths.ideaResearchReports(id), { onLoadingChange: options?.onLoadingChange });
     return response.items.map(mapIdeaResearchReport);
+  },
+  async listIdeaAngles(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    const response = await apiRequest<any[]>(backendApiAdapter.paths.ideaAngles(id), { onLoadingChange: options?.onLoadingChange });
+    return response.map(mapIdeaAngle);
+  },
+  async generateIdeaAngles(id: string, count = 3, prompt?: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    const response = await apiRequest<any[]>(backendApiAdapter.paths.ideaAnglesGenerate(id), { method: 'POST', body: { count, ...(prompt ? { prompt } : {}) }, onLoadingChange: options?.onLoadingChange });
+    return response.map(mapIdeaAngle);
+  },
+  async evaluateIdeaAngle(id: string, angleId: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaAngle(await apiRequest<any>(backendApiAdapter.paths.ideaAnglesEvaluate(id), { method: 'POST', body: { angle_id: angleId }, onLoadingChange: options?.onLoadingChange }));
+  },
+  async approveIdeaAngle(id: string, angleId: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaAngle(await apiRequest<any>(backendApiAdapter.paths.ideaAnglesApprove(id), { method: 'POST', body: { angle_id: angleId }, onLoadingChange: options?.onLoadingChange }));
+  },
+  async overrideIdeaAngle(id: string, angleId: string, reason: string, options?: { overriddenBy?: string; metadata?: Record<string, unknown>; onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaAngle(await apiRequest<any>(backendApiAdapter.paths.ideaAnglesOverride(id), { method: 'POST', body: { angle_id: angleId, reason, overridden_by: options?.overriddenBy ?? DEFAULT_WORKSPACE_ID, metadata: options?.metadata ?? {} }, onLoadingChange: options?.onLoadingChange }));
   },
 };
 

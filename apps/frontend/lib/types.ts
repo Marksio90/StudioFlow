@@ -63,6 +63,38 @@ export interface IdeaResearchReport {
   createdAt: string;
 }
 
+export interface AngleEvaluation {
+  hookClarity: number;
+  novelty: number;
+  audienceFit: number;
+  risk: number;
+  overallScore: number;
+  gatePassed: boolean;
+  blockedReasons: string[];
+}
+
+export interface AngleOverride {
+  reason: string;
+  overriddenBy: string;
+  metadata: Record<string, unknown>;
+  at: string;
+  rejectionReasons: string[];
+}
+
+export interface IdeaAngle {
+  id: string;
+  contentIdeaId: string;
+  channelId: string;
+  videoProjectId: string;
+  angle: Record<string, unknown>;
+  status: string;
+  evaluation: AngleEvaluation | null;
+  approved: boolean;
+  override: AngleOverride | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ComplianceReport {
   score: number;
   riskLevel: RiskLevel;
