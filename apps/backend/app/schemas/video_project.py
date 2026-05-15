@@ -185,3 +185,34 @@ class ThumbnailConceptCreate(ProjectScopedEntityBase):
 
 class MonetizationPlanCreate(ProjectScopedEntityBase):
     plan: dict
+
+
+class ContentIdeaBase(BaseModel):
+    video_project_id: UUID
+    idea_text: str = Field(min_length=1)
+
+
+class ContentIdeaCreate(ContentIdeaBase):
+    pass
+
+
+class ContentIdeaOut(ContentIdeaBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+# Deprecated compatibility aliases for existing VideoIdea naming.
+VideoIdeaBase = ContentIdeaBase
+VideoIdeaCreate = ContentIdeaCreate
+VideoIdeaOut = ContentIdeaOut
+
+
+def content_idea_from_video_idea_payload(payload: dict) -> ContentIdeaCreate:
+    """Backward-compatible request adapter from VideoIdea payload shape."""
+    return ContentIdeaCreate(**payload)
+
+
+def content_idea_to_video_idea_response(content_idea: ContentIdeaOut) -> VideoIdeaOut:
+    """Backward-compatible response adapter to VideoIdea schema."""
+    return VideoIdeaOut(**content_idea.model_dump())

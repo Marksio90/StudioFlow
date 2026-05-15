@@ -51,10 +51,14 @@ class VideoProject(Base, UUIDMixin, TimestampMixin):
     status: Mapped[VideoProjectStatus] = mapped_column(Enum(VideoProjectStatus), default=VideoProjectStatus.draft, nullable=False)
 
 
-class VideoIdea(Base, UUIDMixin, TimestampMixin):
+class ContentIdea(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "video_ideas"
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
     idea_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# Deprecated alias for backward compatibility.
+VideoIdea = ContentIdea
 
 
 class ScriptDraft(Base, UUIDMixin, TimestampMixin):
