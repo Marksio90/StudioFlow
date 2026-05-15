@@ -14,6 +14,11 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest, MockLLMProvider
 from app.services.model_router import ModelRouter
+from app.services.prompt_registry import (
+    PromptRegistry,
+    build_default_prompt_registry,
+    serialize_untrusted_block,
+)
 from app.services.redaction import redacted_text
 
 
@@ -95,10 +100,17 @@ class LLMRequestContext:
 
 
 class TrackedLLMClient:
-    def __init__(self, provider: LLMProvider, model_router: ModelRouter | None = None, cost_tracker: CostTracker | None = None) -> None:
+    def __init__(
+        self,
+        provider: LLMProvider,
+        model_router: ModelRouter | None = None,
+        cost_tracker: CostTracker | None = None,
+        prompt_registry: PromptRegistry | None = None,
+    ) -> None:
         self.provider = provider
         self.model_router = model_router or ModelRouter()
         self.cost_tracker = cost_tracker or NoopCostTracker()
+        self.prompt_registry = prompt_registry or build_default_prompt_registry()
 
     def generate(self, *, task_type: str, payload: dict, context: LLMRequestContext) -> dict[str, Any]:
         return self._generate_dict(task_type=task_type, payload=payload, context=context)
@@ -106,14 +118,24 @@ class TrackedLLMClient:
     def _generate_dict(self, *, task_type: str, payload: dict, context: LLMRequestContext, repair_input: str | None = None) -> dict[str, Any]:
         started = perf_counter()
         llm_config = self.model_router.resolve(task_type=task_type)
+        payload_json = serialize_untrusted_block(payload)
         if repair_input is None:
-            user_payload = str(payload)
+            system_prompt, user_payload = self.prompt_registry.render(
+                name="agent_generate_json",
+                version="v1",
+                variables={"task_type": task_type, "payload_json": payload_json},
+            )
             messages = [LLMMessage(role="user", content=user_payload)]
-            system_prompt = f"Task: {task_type}. Return valid JSON only."
         else:
-            user_payload = repair_input
-            messages = [LLMMessage(role="user", content=repair_input)]
-            system_prompt = "Repair the following content into valid JSON only. Return JSON with no markdown."
+            system_prompt, user_payload = self.prompt_registry.render(
+                name="agent_repair_json",
+                version="v1",
+                variables={
+                    "payload_json": payload_json,
+                    "invalid_output_json": serialize_untrusted_block(repair_input),
+                },
+            )
+            messages = [LLMMessage(role="user", content=user_payload)]
         request = LLMRequest(
             task_type=task_type,
             system_prompt=system_prompt,
@@ -151,7 +173,7 @@ class TrackedLLMClient:
                 task_type=task_type,
                 payload=payload,
                 context=context,
-                repair_input=f"Return strict JSON only for this task payload.\n{payload}\nPrevious invalid output:\n{response.raw_text}",
+                repair_input=response.raw_text,
             )
             raw = repaired
         if raw is None:
