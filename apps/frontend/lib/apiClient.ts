@@ -9,7 +9,7 @@ const DEFAULT_CHANNEL_ID = process.env.NEXT_PUBLIC_CHANNEL_ID ?? '00000000-0000-
 
 type ApiRequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  query?: Record<string, string | number | boolean | undefined>;
+  query?: Record<string, string | number | boolean | null | undefined>;
   body?: unknown;
   timeoutMs?: number;
   onLoadingChange?: (isLoading: boolean) => void;
@@ -69,7 +69,8 @@ export const backendApiAdapter: ApiAdapter = {
     channel_id: DEFAULT_CHANNEL_ID
   }),
   toApprovalBody: (_approve, note) => ({
-    decision_note: note ?? null
+    decided_by_user_id: DEFAULT_WORKSPACE_ID,
+    comment: note ?? null
   })
 };
 

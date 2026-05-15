@@ -14,7 +14,7 @@ describe('apiClient contract', () => {
       id: 'a1', video_project_id: 'p1', channel_id: 'c1', youtube_video_id: 'y1', views: 10, watch_time_minutes: 11, average_view_duration: 12, ctr: 1.2, likes: 2, comments: 3, subscribers_gained: 4, estimated_revenue: 5, snapshot_at: '2026-01-01T00:00:00Z'
     }];
 
-    const fetchMock = vi.spyOn(global, 'fetch' as never).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/api/v1/video-projects?')) {
         return new Response(JSON.stringify({ items: [project], total: 1, limit: 50, offset: 0 }), { status: 200 });
@@ -54,7 +54,7 @@ describe('apiClient contract', () => {
 
 
   it('fails fast on backend 500 errors', async () => {
-    vi.spyOn(global, 'fetch' as never).mockResolvedValue(new Response(JSON.stringify({ detail: 'Internal Server Error' }), { status: 500, statusText: 'Internal Server Error' }) as never);
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'Internal Server Error' }), { status: 500, statusText: 'Internal Server Error' }));
 
     await expect(apiClient.getProject('p500')).rejects.toThrow(/HTTP 500/);
   });

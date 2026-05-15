@@ -126,6 +126,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/video-projects/{project_id}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Approval */
+        get: operations["approval_api_v1_video_projects__project_id__approval_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/video-projects/{project_id}/approval-decisions": {
         parameters: {
             query?: never;
@@ -262,6 +279,78 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/video-projects/publishing-plans/{plan_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Video */
+        post: operations["publish_video_api_v1_video_projects_publishing_plans__plan_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Channels */
+        get: operations["list_channels_api_v1_channels_get"];
+        put?: never;
+        /** Create Channel */
+        post: operations["create_channel_api_v1_channels_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/{channel_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Channel */
+        get: operations["get_channel_api_v1_channels__channel_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Channel */
+        delete: operations["delete_channel_api_v1_channels__channel_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Channel */
+        patch: operations["patch_channel_api_v1_channels__channel_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/channels/{channel_id}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Channel Memory */
+        get: operations["get_channel_memory_api_v1_channels__channel_id__memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Channel Memory */
+        patch: operations["patch_channel_memory_api_v1_channels__channel_id__memory_patch"];
         trace?: never;
     };
     "/api/v1/usage/{organization_id}": {
@@ -401,6 +490,24 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ApprovalAggregateOut */
+        ApprovalAggregateOut: {
+            /**
+             * Video Project Id
+             * Format: uuid
+             */
+            video_project_id: string;
+            /** Status */
+            status: string;
+            /** Requested At */
+            requested_at?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decided By User Id */
+            decided_by_user_id?: string | null;
+            /** Latest Comment */
+            latest_comment?: string | null;
+        };
         /** ApprovalDecisionIn */
         ApprovalDecisionIn: {
             /** Comment */
@@ -437,6 +544,106 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ChannelCreate */
+        ChannelCreate: {
+            /**
+             * Organization Id
+             * Format: uuid
+             */
+            organization_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Youtube Channel Id */
+            youtube_channel_id: string;
+        };
+        /** ChannelMemoryOut */
+        ChannelMemoryOut: {
+            /**
+             * Channel Id
+             * Format: uuid
+             */
+            channel_id: string;
+            memory?: components["schemas"]["ChannelMemoryPayload"];
+        };
+        /** ChannelMemoryPayload */
+        ChannelMemoryPayload: {
+            /** Approved Title Patterns */
+            approved_title_patterns?: string[];
+            /** Rejected Title Patterns */
+            rejected_title_patterns?: string[];
+            /** Thumbnail Rules */
+            thumbnail_rules?: {
+                [key: string]: unknown;
+            };
+            /** Banned Phrases */
+            banned_phrases?: string[];
+            /** Preferred Phrases */
+            preferred_phrases?: string[];
+            /** Compliance Preferences */
+            compliance_preferences?: {
+                [key: string]: unknown;
+            };
+            /** Narrator Style */
+            narrator_style?: {
+                [key: string]: unknown;
+            };
+            /** Visual Style */
+            visual_style?: {
+                [key: string]: unknown;
+            };
+            /** Audience Objections */
+            audience_objections?: string[];
+            /** Best Performing Patterns */
+            best_performing_patterns?: string[];
+            /** Worst Performing Patterns */
+            worst_performing_patterns?: string[];
+            /** Freeform Memory Notes */
+            freeform_memory_notes?: string[];
+        };
+        /** ChannelOut */
+        ChannelOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Organization Id
+             * Format: uuid
+             */
+            organization_id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Youtube Channel Id */
+            youtube_channel_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ChannelUpdate */
+        ChannelUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Youtube Channel Id */
+            youtube_channel_id?: string | null;
         };
         /** ComplianceReportOut */
         ComplianceReportOut: {
@@ -485,6 +692,17 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** PaginatedChannels */
+        PaginatedChannels: {
+            /** Items */
+            items: components["schemas"]["ChannelOut"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** PaginatedVideoProjects */
         PaginatedVideoProjects: {
             /** Items */
@@ -522,6 +740,20 @@ export interface components {
              * @default private
              */
             visibility: string;
+            /** Selected Title Variant Id */
+            selected_title_variant_id?: string | null;
+            /** Selected Thumbnail Concept Id */
+            selected_thumbnail_concept_id?: string | null;
+            /** Final Description Snapshot */
+            final_description_snapshot?: string | null;
+            /** Final Tags Snapshot */
+            final_tags_snapshot?: string[] | null;
+            /** Compliance Report Id */
+            compliance_report_id?: string | null;
+            /** Asset Bundle Metadata */
+            asset_bundle_metadata?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** PublishingPlanOut */
         PublishingPlanOut: {
@@ -553,6 +785,20 @@ export interface components {
             tags: string[];
             /** Visibility */
             visibility: string;
+            /** Selected Title Variant Id */
+            selected_title_variant_id?: string | null;
+            /** Selected Thumbnail Concept Id */
+            selected_thumbnail_concept_id?: string | null;
+            /** Final Description Snapshot */
+            final_description_snapshot?: string | null;
+            /** Final Tags Snapshot */
+            final_tags_snapshot?: string[] | null;
+            /** Compliance Report Id */
+            compliance_report_id?: string | null;
+            /** Asset Bundle Metadata */
+            asset_bundle_metadata?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Created At
              * Format: date-time
@@ -631,6 +877,7 @@ export interface components {
             /** Title */
             title: string;
             status: components["schemas"]["VideoProjectStatus"];
+            approval?: components["schemas"]["ApprovalAggregateOut"] | null;
             /**
              * Created At
              * Format: date-time
@@ -690,7 +937,13 @@ export interface operations {
                 channel_id?: string | null;
                 workspace_id?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+                "x-correlation-id"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -721,6 +974,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -756,6 +1013,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -789,6 +1050,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -820,6 +1085,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -857,6 +1126,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -890,6 +1163,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -923,6 +1200,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -960,6 +1241,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -997,6 +1282,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1029,11 +1318,52 @@ export interface operations {
             };
         };
     };
+    approval_api_v1_video_projects__project_id__approval_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalAggregateOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     approval_decisions_api_v1_video_projects__project_id__approval_decisions_get: {
         parameters: {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1067,6 +1397,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1100,6 +1434,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1133,6 +1471,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1166,6 +1508,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1199,6 +1545,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1238,6 +1588,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1271,6 +1625,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -1308,6 +1666,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -1343,6 +1705,10 @@ export interface operations {
             query?: never;
             header?: {
                 "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
             };
             path: {
                 plan_id: string;
@@ -1375,10 +1741,321 @@ export interface operations {
             };
         };
     };
+    publish_video_api_v1_video_projects_publishing_plans__plan_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishingPlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_channels_api_v1_channels_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+                "x-correlation-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedChannels"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_channel_api_v1_channels_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_channel_api_v1_channels__channel_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_channel_api_v1_channels__channel_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_channel_api_v1_channels__channel_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_channel_memory_api_v1_channels__channel_id__memory_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelMemoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_channel_memory_api_v1_channels__channel_id__memory_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-correlation-id"?: string | null;
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+            };
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelMemoryPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelMemoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_usage_api_v1_usage__organization_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+                "x-correlation-id"?: string | null;
+            };
             path: {
                 organization_id: string;
             };
@@ -1409,7 +2086,13 @@ export interface operations {
     register_channel_api_v1_usage__organization_id__channels__channel_id__post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-API-Key"?: string | null;
+                "X-User-Id"?: string | null;
+                "X-Org-Id"?: string | null;
+                "X-Workspace-Id"?: string | null;
+                "x-correlation-id"?: string | null;
+            };
             path: {
                 organization_id: string;
                 channel_id: string;
