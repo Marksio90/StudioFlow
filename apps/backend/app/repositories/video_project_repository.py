@@ -11,8 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
 from app.db.models import Approval, ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCall, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
-
-
+from app.services.redaction import redacted_text
 
 
 def _default_compliance(project_id: UUID) -> dict:
@@ -41,7 +40,7 @@ def _now() -> datetime:
 def _safe_preview(value: object, max_len: int = 512) -> str | None:
     if value is None:
         return None
-    raw = value if isinstance(value, str) else json.dumps(value, default=str)
+    raw = redacted_text(value)
     text = raw.replace("\n", " ").strip()
     return text[:max_len]
 
@@ -338,7 +337,7 @@ class InMemoryVideoProjectRepository:
             "estimated_cost_usd": call.get("estimated_cost_usd"),
             "latency_ms": call.get("latency_ms"),
             "status": call.get("status", "success"),
-            "error_message": call.get("error_message"),
+            "error_message": redacted_text(call.get("error_message")) if call.get("error_message") else None,
             "trace_id": call.get("trace_id"),
             "request_id": call.get("request_id"),
             "related_entity_type": call.get("related_entity_type"),
@@ -466,7 +465,7 @@ class DBVideoProjectRepository:
             estimated_cost_usd=call.get("estimated_cost_usd"),
             latency_ms=call.get("latency_ms"),
             status=call.get("status", "success"),
-            error_message=call.get("error_message"),
+            error_message=redacted_text(call.get("error_message")) if call.get("error_message") else None,
             trace_id=call.get("trace_id"),
             request_id=call.get("request_id"),
             related_entity_type=call.get("related_entity_type"),
