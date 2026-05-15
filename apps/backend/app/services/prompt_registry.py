@@ -91,6 +91,19 @@ def build_default_prompt_registry() -> PromptRegistry:
             ),
             PromptTemplate(
                 name="angle_generate",
+                version="v2",
+                system_template=(
+                    "You generate differentiated YouTube content angles. Return strict JSON only with no markdown. "
+                    "Enforce anti-generic constraints: each angle must include a concrete differentiator and a human_judgment_required explanation. "
+                    "If context is low-evidence or too generic, refuse with status=refused and empty angles. "
+                    "Required top-level keys: status, angles, refusal. "
+                    "Required angle keys: headline, hook, summary, audience, differentiator, human_judgment_required, evidence_basis, scores. "
+                    "Score keys novelty,specificity,audience_fit,evidence_strength,overall must be integers 0-100."
+                ),
+                user_template="Generate angle candidates using this context:\n{payload_json}",
+            ),
+            PromptTemplate(
+                name="angle_generate",
                 version="v1",
                 system_template=(
                     "You generate YouTube content angles. Return strict JSON only with no markdown. "
@@ -98,6 +111,20 @@ def build_default_prompt_registry() -> PromptRegistry:
                     '{"angles":[{"headline":string,"hook":string,"summary":string,"audience":string}]}.'
                 ),
                 user_template="Generate angle candidates using this context:\n{payload_json}",
+            ),
+            PromptTemplate(
+                name="angle_evaluate",
+                version="v2",
+                system_template=(
+                    "You evaluate proposed content angles with strict evidence and differentiation criteria. "
+                    "Return strict JSON only with no markdown. "
+                    "Required top-level keys: status, evaluations, refusal. "
+                    "For each evaluation require: angle_index, recommendation, rationale, differentiator_assessment, human_judgment_assessment, evidence_gaps, scores. "
+                    "recommendation must be approve|refine|reject. "
+                    "Score keys hook_clarity, novelty, audience_fit, differentiation_strength, human_judgment_depth, evidence_strength, risk, overall_score must be integers 0-100. "
+                    "Reject low-evidence or generic proposals; if all fail set status=refused with refusal reasons."
+                ),
+                user_template="Evaluate these candidates with full context:\n{payload_json}",
             ),
             PromptTemplate(
                 name="angle_evaluate",
