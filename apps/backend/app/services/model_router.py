@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from app.services.llm_config import LLMModelConfig
+
 
 class ModelRouter:
     """Resolve model names per task type using environment configuration."""
@@ -26,17 +28,17 @@ class ModelRouter:
         "summarizationagent": "summarization",
     }
 
-    def __init__(self, default_model: str | None = None) -> None:
-        self.default_model = default_model or os.getenv("LLM_DEFAULT_MODEL", "gpt-4o-mini")
+    def __init__(self, default_config: LLMModelConfig | None = None) -> None:
+        self.default_config = default_config or LLMModelConfig.from_env()
 
-    def resolve(self, *, task_type: str) -> str:
+    def resolve(self, *, task_type: str) -> LLMModelConfig:
         normalized_task = self._normalize_task_type(task_type)
         model_env = self.TASK_MODEL_ENV_MAP.get(normalized_task)
         if model_env:
             configured_model = os.getenv(model_env)
             if configured_model:
-                return configured_model
-        return self.default_model
+                return self.default_config.model_copy(update={"model": configured_model})
+        return self.default_config
 
     def _normalize_task_type(self, task_type: str) -> str:
         cleaned_task_type = task_type.strip()
