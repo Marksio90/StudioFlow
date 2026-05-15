@@ -10,6 +10,7 @@ export default function Layout({ title, children }: { title: string; children: R
           <Link href="/">Dashboard</Link>
           <Link href="/projects">Projects</Link>
           <Link href="/projects/new">Create</Link>
+          <Link href="/ideas">Ideas</Link>
         </div>
       </div>
       {children}
