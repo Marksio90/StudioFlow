@@ -42,3 +42,27 @@ def test_default_registry_renders_agent_prompt():
     )
     assert "ResearchAgent" in system_prompt
     assert user_prompt == '{"a":1}'
+
+
+def test_prompt_registry_version_lookup_is_isolated():
+    registry = PromptRegistry([
+        PromptTemplate(name="a", version="v1", system_template="s1", user_template="u1"),
+        PromptTemplate(name="a", version="v2", system_template="s2", user_template="u2"),
+    ])
+    assert registry.get(name="a", version="v1").system_template == "s1"
+    assert registry.get(name="a", version="v2").system_template == "s2"
+
+
+def test_render_preserves_untrusted_content_without_template_injection():
+    registry = PromptRegistry([
+        PromptTemplate(name="safe", version="v1", system_template="Task {task_type}", user_template="{payload_json}")
+    ])
+    payload = serialize_untrusted_block({"x": "{malicious}", "y": "```json"})
+    system_prompt, user_prompt = registry.render(
+        name="safe",
+        version="v1",
+        variables={"task_type": "ResearchAgent", "payload_json": payload},
+    )
+    assert system_prompt == "Task ResearchAgent"
+    assert user_prompt == payload
+    assert "{malicious}" in user_prompt

@@ -141,6 +141,25 @@ class _InvalidSchemaProvider(LLMProvider):
         return LLMResponse(raw_text='{"video_ideas":"not-a-list"}', parsed_json=None, usage=LLMUsage(output_tokens=10))
 
 
+class _AlwaysMalformedProvider(LLMProvider):
+    def generate(self, request: LLMRequest) -> LLMResponse:
+        return LLMResponse(raw_text='{"video_ideas": [}', parsed_json=None, usage=LLMUsage(output_tokens=10))
+
+
+class _RecordingCostTracker(NoopCostTracker):
+    def __init__(self) -> None:
+        super().__init__()
+        self.failures: list[dict] = []
+
+    def record_failure(self, event: dict) -> None:
+        self.failures.append(event)
+
+
+class _SecretFailureProvider(LLMProvider):
+    def generate(self, request: LLMRequest) -> LLMResponse:
+        raise RuntimeError("api_key=super-secret password=hunter2")
+
+
 def test_structured_generation_recovers_once_from_malformed_json():
     client = TrackedLLMClient(_MalformedThenValidProvider())
     agent = ResearchAgent(client, context=_context())
@@ -154,3 +173,28 @@ def test_structured_generation_raises_schema_validation_error():
     with pytest.raises(AgentExecutionError) as exc:
         agent.run(_inputs()[0])
     assert isinstance(exc.value.__cause__, LLMSchemaValidationError | LLMParseError)
+
+
+def test_malformed_json_recovery_path_exhausts_and_raises_parse_error():
+    client = TrackedLLMClient(_AlwaysMalformedProvider())
+    agent = ResearchAgent(client, context=_context(), retry=RetryPolicy(max_attempts=1))
+    with pytest.raises(AgentExecutionError) as exc:
+        agent.run(_inputs()[0])
+    assert isinstance(exc.value.__cause__, LLMParseError)
+
+
+def test_llm_call_failure_logging_is_complete_and_redacted():
+    tracker = _RecordingCostTracker()
+    client = TrackedLLMClient(_SecretFailureProvider(), cost_tracker=tracker)
+    agent = ResearchAgent(client, context=_context(), retry=RetryPolicy(max_attempts=1))
+    with pytest.raises(AgentExecutionError):
+        agent.run(_inputs()[0])
+    assert len(tracker.failures) == 1
+    failure = tracker.failures[0]
+    assert failure["status"] == "failed"
+    assert failure["provider"]
+    assert failure["model"]
+    assert failure["trace_id"]
+    assert failure["related_entity_type"] == "workflow_run"
+    assert "super-secret" not in failure["error_message"]
+    assert "hunter2" not in failure["error_message"]
