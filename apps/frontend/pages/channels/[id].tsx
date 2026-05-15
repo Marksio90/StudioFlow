@@ -2,13 +2,13 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { apiClient } from '../../lib/apiClient';
-import { Channel, ChannelMemoryInput } from '../../lib/types';
+import { Channel, ChannelMemoryInput, NicheReport } from '../../lib/types';
 
-type TabKey = 'overview' | 'audience' | 'tone' | 'pillars' | 'title' | 'thumbnail' | 'compliance' | 'memory';
+type TabKey = 'overview' | 'audience' | 'tone' | 'pillars' | 'title' | 'thumbnail' | 'compliance' | 'memory' | 'niche';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' }, { key: 'audience', label: 'Audience' }, { key: 'tone', label: 'Tone of Voice' }, { key: 'pillars', label: 'Content Pillars' },
-  { key: 'title', label: 'Title Rules' }, { key: 'thumbnail', label: 'Thumbnail Rules' }, { key: 'compliance', label: 'Compliance Rules' }, { key: 'memory', label: 'Memory Notes' }
+  { key: 'title', label: 'Title Rules' }, { key: 'thumbnail', label: 'Thumbnail Rules' }, { key: 'compliance', label: 'Compliance Rules' }, { key: 'memory', label: 'Memory Notes' }, { key: 'niche', label: 'Niche Intelligence' }
 ];
 
 const defaults: ChannelMemoryInput = {
@@ -29,12 +29,15 @@ export default function ChannelProfilePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [nicheReports, setNicheReports] = useState<NicheReport[]>([]);
+  const [runningNiche, setRunningNiche] = useState(false);
 
   useEffect(() => {
     if (!channelId) return;
     setLoading(true); setError('');
     Promise.all([apiClient.getChannel(channelId), apiClient.getChannelMemory(channelId)])
       .then(([loadedChannel, loadedMemory]) => { setChannel(loadedChannel); const { channelId: _channelId, ...memoryInput } = loadedMemory; setForm(memoryInput); })
+      .then(async () => { const reports = await apiClient.listNicheReports(channelId); setNicheReports(reports); })
       .catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [channelId]);
 
@@ -68,6 +71,7 @@ export default function ChannelProfilePage() {
       {tab === 'thumbnail' && <><label>Thumbnail Rules (JSON)</label><textarea className="input" rows={10} value={JSON.stringify(form.thumbnailRules, null, 2)} onChange={(e) => { try { setField('thumbnailRules', JSON.parse(e.target.value)); setValidationError(''); } catch { setValidationError('Thumbnail rules must be valid JSON.'); } }} /></>}
       {tab === 'compliance' && <><label>Banned Phrases</label><textarea className="input" rows={5} value={formatLines(form.bannedPhrases)} onChange={(e) => setField('bannedPhrases', parseLines(e.target.value))} /><label>Preferred Phrases</label><textarea className="input" rows={5} value={formatLines(form.preferredPhrases)} onChange={(e) => setField('preferredPhrases', parseLines(e.target.value))} /><label>Compliance Preferences (JSON)</label><textarea className="input" rows={8} value={JSON.stringify(form.compliancePreferences, null, 2)} onChange={(e) => { try { setField('compliancePreferences', JSON.parse(e.target.value)); setValidationError(''); } catch { setValidationError('Compliance preferences must be valid JSON.'); } }} /></>}
       {tab === 'memory' && <><label>Memory Notes</label><textarea className="input" rows={8} value={formatLines(form.freeformMemoryNotes)} onChange={(e) => setField('freeformMemoryNotes', parseLines(e.target.value))} /><label>Worst Performing Patterns</label><textarea className="input" rows={5} value={formatLines(form.worstPerformingPatterns)} onChange={(e) => setField('worstPerformingPatterns', parseLines(e.target.value))} /></>}
+      {tab === 'niche' && <><p className='muted'>Run AI-assisted niche analysis using channel profile + memory + notes.</p><button className='btn primary' disabled={runningNiche} onClick={async ()=>{ setRunningNiche(true); setError(''); try { const report = await apiClient.runNicheAnalysis(channelId, form.freeformMemoryNotes.join('\n')); setNicheReports((curr)=>[report, ...curr]); } catch (e) { setError(e instanceof Error ? e.message : 'Failed niche analysis'); } finally { setRunningNiche(false);} }}>{runningNiche ? 'Analyzing...' : 'Run Analysis'}</button>{!nicheReports.length ? <p className='muted'>No reports yet.</p> : <div style={{marginTop: 12}}><h4>Latest Summary</h4><p>{nicheReports[0].summary}</p><p><strong>Overall Score:</strong> {nicheReports[0].scores.overallScore}</p><h4>Risks</h4><ul>{nicheReports[0].risks.map((r)=> <li key={r}>{r}</li>)}</ul><h4>Recommendations</h4><ul>{nicheReports[0].nextActions.map((a)=> <li key={a}>{a}</li>)}</ul><h4>History</h4><ul>{nicheReports.map((r)=> <li key={r.id}>{new Date(r.createdAt).toLocaleString()} - {r.scores.overallScore}</li>)}</ul></div>}</>}
       {validationError && <p className="error">{validationError}</p>}
       {success && <p style={{ color: '#166534' }}>{success}</p>}
       {error && channel && <p className="error">{error}</p>}

@@ -215,4 +215,18 @@ class MockLLMProvider:
                 "next_recommendations": ["Skrócić segment problemowy"],
                 "title_thumbnail_suggestions": ["Mocniejszy kontrast miniatury"],
             }
+        if task == "NicheIntelligenceAgent":
+            return {
+                "summary": "Niche has solid demand with moderate competition and strong room for distinct positioning.",
+                "score_explanations": {"demand_score": "Consistent audience pull in the niche cluster.", "competition_score": "Established players exist but gaps remain."},
+                "strengths": ["Clear audience pain points", "Repeatable topic stream"],
+                "weaknesses": ["Crowded keyword surface"],
+                "risks": ["Potential policy sensitivity in claims"],
+                "recommended_positioning": "Practical, evidence-led tutorials for intermediate creators.",
+                "content_pillar_suggestions": ["How-to breakdowns", "Case-study deconstructions", "Tooling workflows"],
+                "differentiation_opportunities": ["Original framework naming", "Before/after teardown series"],
+                "compliance_notes": ["Avoid guaranteed income claims", "Use clear AI disclosure when synthetic assets are used"],
+                "next_actions": ["Validate with 10 pilot topics", "Run audience objection interviews"],
+                "scores": {"demand_score": 78, "competition_score": 64, "originality_potential": 81, "production_difficulty": 57, "monetization_potential": 69, "compliance_risk": 35, "long_term_depth": 76, "overall_score": 74}
+            }
         return {"task_type": task, "call": self.calls}

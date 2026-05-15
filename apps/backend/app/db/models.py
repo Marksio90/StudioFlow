@@ -67,7 +67,8 @@ class VideoProject(Base, UUIDMixin, TimestampMixin):
 
 class ContentIdea(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "video_ideas"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled idea")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -92,19 +93,22 @@ VideoIdea = ContentIdea
 
 class ScriptDraft(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "script_drafts"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class SEORecommendation(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "seo_recommendations"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class ComplianceReport(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "compliance_reports"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     risk_level: Mapped[ComplianceRiskLevel] = mapped_column(Enum(ComplianceRiskLevel), nullable=False)
     findings: Mapped[str] = mapped_column(Text, nullable=True)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -112,7 +116,8 @@ class ComplianceReport(Base, UUIDMixin, TimestampMixin):
 
 class WorkflowRun(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "workflow_runs"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     state: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
@@ -152,7 +157,8 @@ class TaskAttempt(Base, UUIDMixin, TimestampMixin):
 
 class ApprovalDecision(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "approval_decisions"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus), default=ApprovalStatus.awaiting_review, nullable=False)
     comment: Mapped[str] = mapped_column(Text, nullable=True)
     decided_by_user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -170,7 +176,8 @@ class Approval(Base):
 
 class LLMCall(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "llm_calls"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     provider: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     prompt_template_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -222,7 +229,8 @@ class AnalyticsSnapshot(Base, UUIDMixin, TimestampMixin):
 
 class PublishingPlan(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "publishing_plans"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[PublishingPlanStatus] = mapped_column(Enum(PublishingPlanStatus), default=PublishingPlanStatus.draft, nullable=False)
@@ -241,7 +249,8 @@ class PublishingPlan(Base, UUIDMixin, TimestampMixin):
 
 class Asset(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "assets"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     asset_type: Mapped[str] = mapped_column(String(64), nullable=False)
     url: Mapped[str] = mapped_column(String(1024), nullable=False)
 
@@ -261,65 +270,75 @@ class ChannelMemory(Base, UUIDMixin, TimestampMixin):
 
 class ResearchBrief(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "research_briefs"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     brief: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class Angle(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "angles"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     angle: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class HookVariant(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "hook_variants"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     hook: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class RetentionReview(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "retention_reviews"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     review: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class VisualPlan(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "visual_plans"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     plan: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class VisualScene(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "visual_scenes"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     scene: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class AudioBrief(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "audio_briefs"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     brief: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class TitleVariant(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "title_variants"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     title_variant: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class ThumbnailConcept(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "thumbnail_concepts"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     concept: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class MonetizationPlan(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "monetization_plans"
-    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="draft")
     plan: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
@@ -336,3 +355,19 @@ Index("ix_audio_briefs_project_created_at", AudioBrief.video_project_id, AudioBr
 Index("ix_title_variants_project_created_at", TitleVariant.video_project_id, TitleVariant.created_at)
 Index("ix_thumbnail_concepts_project_created_at", ThumbnailConcept.video_project_id, ThumbnailConcept.created_at)
 Index("ix_monetization_plans_project_created_at", MonetizationPlan.video_project_id, MonetizationPlan.created_at)
+
+
+class NicheIntelligenceReport(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "niche_intelligence_reports"
+    channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    score_explanations: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    strengths: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    weaknesses: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    risks: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    recommended_positioning: Mapped[str] = mapped_column(Text, nullable=False)
+    content_pillar_suggestions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    differentiation_opportunities: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    compliance_notes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    next_actions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    scores: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
