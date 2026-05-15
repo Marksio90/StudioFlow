@@ -29,6 +29,7 @@ from app.schemas.video_project import (
 )
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest
 from app.services.prompt_registry import build_default_prompt_registry
+from app.services.angle_validation_service import AngleValidationService
 
 router = APIRouter(tags=["content-ideas"])
 
@@ -50,6 +51,7 @@ MUTABLE_FIELDS = {
 }
 _memory_topic_reports: dict[UUID, list[ContentIdeaResearchAnalyzeResponse]] = {}
 _memory_angles: dict[UUID, list[dict]] = {}
+_angle_validation_service = AngleValidationService()
 
 
 def _score_angle_payload(angle: dict) -> AngleEvaluationOut:
@@ -484,10 +486,16 @@ async def approve_idea_angle(idea_id: UUID, payload: AngleApprovalPayload, corre
     if row is None:
         raise structured_error(404, "ANGLE_NOT_FOUND", "Angle not found", correlation_id)
     evaluation = row.get("evaluation") or _score_angle_payload(row["angle"]).model_dump()
-    if not evaluation.get("gate_passed"):
-        blocked = ",".join(evaluation.get("blocked_reasons", []))
-        raise structured_error(409, "ANGLE_APPROVAL_BLOCKED", f"Angle failed deterministic gates: {blocked}", correlation_id)
     row["evaluation"] = evaluation
+    gate = _angle_validation_service.evaluate(evaluation)
+    if not gate["gate_passed"]:
+        raise structured_error(
+            409,
+            "ANGLE_APPROVAL_BLOCKED",
+            "Angle failed deterministic score thresholds",
+            correlation_id,
+            details={"rejection_reasons": gate["rejection_reasons"], "requires_override": True},
+        )
     row["approved"] = True
     row["status"] = "approved"
     row["updated_at"] = datetime.now(timezone.utc)
@@ -501,8 +509,28 @@ async def override_idea_angle(idea_id: UUID, payload: AngleOverridePayload, corr
     row = next((r for r in rows if r["id"] == payload.angle_id), None)
     if row is None:
         raise structured_error(404, "ANGLE_NOT_FOUND", "Angle not found", correlation_id)
+    reason = payload.reason.strip()
+    if not reason:
+        raise structured_error(422, "ANGLE_OVERRIDE_REASON_REQUIRED", "Override reason must be non-empty", correlation_id)
+    evaluation = row.get("evaluation") or _score_angle_payload(row["angle"]).model_dump()
+    row["evaluation"] = evaluation
+    gate = _angle_validation_service.evaluate(evaluation)
+    if gate["gate_passed"]:
+        raise structured_error(
+            409,
+            "ANGLE_OVERRIDE_NOT_ALLOWED",
+            "Override is only permitted when approval gate fails",
+            correlation_id,
+            details={"rejection_reasons": [], "requires_override": False},
+        )
     row["approved"] = True
     row["status"] = "approved_override"
-    row["override"] = {"reason": payload.reason, "overridden_by": payload.overridden_by, "metadata": payload.metadata, "at": datetime.now(timezone.utc)}
+    row["override"] = {
+        "reason": reason,
+        "overridden_by": payload.overridden_by,
+        "metadata": payload.metadata,
+        "at": datetime.now(timezone.utc),
+        "rejection_reasons": gate["rejection_reasons"],
+    }
     row["updated_at"] = datetime.now(timezone.utc)
     return AngleOut.model_validate(row)
