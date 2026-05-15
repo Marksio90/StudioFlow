@@ -78,6 +78,7 @@ class ComplianceReport(Base, UUIDMixin, TimestampMixin):
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
     risk_level: Mapped[ComplianceRiskLevel] = mapped_column(Enum(ComplianceRiskLevel), nullable=False)
     findings: Mapped[str] = mapped_column(Text, nullable=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class WorkflowRun(Base, UUIDMixin, TimestampMixin):
