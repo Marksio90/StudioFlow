@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from app.api.channels import _get_channel
-from app.api.deps import Identity, get_correlation_id, get_db_session, require_action
+from app.api.deps import Identity, get_correlation_id, get_db_session, get_llm_provider, require_action
 from app.db.models import NicheIntelligenceReport
 from app.schemas.niche_intelligence import NicheAnalyzeRequest, NicheIntelligenceReportListOut, NicheIntelligenceReportOut
-from app.services.ai_provider import MockLLMProvider
+from app.services.ai_provider import LLMProvider
 from app.services.niche_intelligence_service import NicheIntelligenceService
 from app.services.prompt_registry import build_default_prompt_registry
 
@@ -24,9 +24,16 @@ def _to_out(row: NicheIntelligenceReport) -> NicheIntelligenceReportOut:
 
 
 @router.post('/analyze', response_model=NicheIntelligenceReportOut)
-async def analyze_channel_niche(channel_id: UUID, payload: NicheAnalyzeRequest, correlation_id: str = Depends(get_correlation_id), session=Depends(get_db_session), identity: Identity = Depends(require_action('write', 'channels'))):
+async def analyze_channel_niche(
+    channel_id: UUID,
+    payload: NicheAnalyzeRequest,
+    correlation_id: str = Depends(get_correlation_id),
+    session=Depends(get_db_session),
+    identity: Identity = Depends(require_action('write', 'channels')),
+    provider: LLMProvider = Depends(get_llm_provider),
+):
     await _get_channel(channel_id, correlation_id, identity, session)
-    service = NicheIntelligenceService(provider=MockLLMProvider(), prompt_registry=build_default_prompt_registry())
+    service = NicheIntelligenceService(provider=provider, prompt_registry=build_default_prompt_registry())
     report = await service.analyze(session, channel_id=channel_id, notes=payload.notes)
     return _to_out(report)
 
