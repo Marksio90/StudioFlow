@@ -1,4 +1,6 @@
 from uuid import UUID
+from datetime import datetime, timezone
+import uuid as _uuid
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import or_, select
@@ -6,7 +8,7 @@ from sqlalchemy import or_, select
 from app.api.channels import _get_channel
 from app.api.deps import Identity, get_correlation_id, get_db_session, get_llm_provider, repo_singleton, require_action
 from app.api.errors import structured_error
-from app.db.models import Channel, ChannelMemory, ContentIdea, LLMCall, TopicResearchReport
+from app.db.models import Angle, Channel, ChannelMemory, ContentIdea, LLMCall, TopicResearchReport
 from app.schemas.channel import ChannelMemoryPayload
 from app.schemas.video_project import (
     ContentIdeaCreatePayload,
@@ -18,6 +20,12 @@ from app.schemas.video_project import (
     ContentIdeaResponse,
     ContentIdeaStatusChangePayload,
     ContentIdeaUpdatePayload,
+    AngleApprovalPayload,
+    AngleEvaluatePayload,
+    AngleEvaluationOut,
+    AngleGeneratePayload,
+    AngleOut,
+    AngleOverridePayload,
 )
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest
 from app.services.prompt_registry import build_default_prompt_registry
@@ -41,6 +49,32 @@ MUTABLE_FIELDS = {
     "idea_text",
 }
 _memory_topic_reports: dict[UUID, list[ContentIdeaResearchAnalyzeResponse]] = {}
+_memory_angles: dict[UUID, list[dict]] = {}
+
+
+def _score_angle_payload(angle: dict) -> AngleEvaluationOut:
+    text = f"{angle.get('headline', '')} {angle.get('hook', '')} {angle.get('summary', '')}".strip()
+    hook_clarity = min(1.0, max(0.0, len(str(angle.get("hook", ""))) / 120))
+    novelty = 1.0 if "unique" in text.lower() or "unexpected" in text.lower() else 0.65
+    audience_fit = 1.0 if angle.get("audience") else 0.7
+    risk = 0.2 if any(w in text.lower() for w in ["guaranteed", "secret cure", "instant riches"]) else 0.05
+    overall = round((hook_clarity * 0.25 + novelty * 0.3 + audience_fit * 0.3 + (1 - risk) * 0.15), 3)
+    blocked = []
+    if hook_clarity < 0.35:
+        blocked.append("HOOK_TOO_WEAK")
+    if risk > 0.15:
+        blocked.append("HIGH_RISK_CLAIMS")
+    if overall < 0.6:
+        blocked.append("LOW_OVERALL_SCORE")
+    return AngleEvaluationOut(
+        hook_clarity=round(hook_clarity, 3),
+        novelty=round(novelty, 3),
+        audience_fit=round(audience_fit, 3),
+        risk=round(risk, 3),
+        overall_score=overall,
+        gate_passed=not blocked,
+        blocked_reasons=blocked,
+    )
 
 
 async def _generate_topic_research_report(provider: LLMProvider, *, idea, channel, channel_memory: dict) -> dict:
@@ -354,3 +388,121 @@ async def list_content_idea_research_reports(
             for r in rows
         ]
     }
+
+
+@router.post("/api/v1/ideas/{idea_id}/angles/generate", response_model=list[AngleOut], tags=["content-ideas"])
+async def generate_idea_angles(
+    idea_id: UUID,
+    payload: AngleGeneratePayload,
+    correlation_id: str = Depends(get_correlation_id),
+    session=Depends(get_db_session),
+    identity: Identity = Depends(require_action("write", "channels")),
+    provider: LLMProvider = Depends(get_llm_provider),
+):
+    idea = await _require_idea(idea_id, correlation_id, identity, session)
+    channel_id = idea.get("channel_id") if isinstance(idea, dict) else idea.channel_id
+    video_project_id = idea.get("video_project_id") if isinstance(idea, dict) else idea.video_project_id
+    base_prompt = payload.prompt or (idea.get("description") if isinstance(idea, dict) else idea.description)
+    response = provider.generate(
+        LLMRequest(
+            task_type="AngleGenerator",
+            system_prompt="Generate JSON with key 'angles' as a list of angle objects.",
+            messages=[LLMMessage(role="user", content=f"Generate {payload.count} angles for: {base_prompt}", trusted=False)],
+        )
+    )
+    parsed = response.parsed_json or {}
+    generated = parsed.get("angles") if isinstance(parsed, dict) else None
+    if not isinstance(generated, list) or not generated:
+        generated = [{"headline": f"Angle {i+1}", "hook": base_prompt or "New angle", "summary": "Generated fallback angle"} for i in range(payload.count)]
+
+    now = datetime.now(timezone.utc)
+    out_rows: list[AngleOut] = []
+    for entry in generated[: payload.count]:
+        row = {
+            "id": _uuid.uuid4(),
+            "content_idea_id": idea_id,
+            "video_project_id": video_project_id,
+            "channel_id": channel_id,
+            "angle": entry if isinstance(entry, dict) else {"headline": str(entry)},
+            "status": "proposed",
+            "approved": False,
+            "evaluation": None,
+            "override": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        if session is None:
+            _memory_angles.setdefault(idea_id, []).append(row)
+        else:
+            session.add(Angle(video_project_id=video_project_id, channel_id=channel_id, angle=row))
+        out_rows.append(AngleOut.model_validate(row))
+    if session is not None:
+        await session.commit()
+    return out_rows
+
+
+@router.post("/api/v1/ideas/{idea_id}/angles/evaluate", response_model=AngleOut, tags=["content-ideas"])
+async def evaluate_idea_angle(idea_id: UUID, payload: AngleEvaluatePayload, correlation_id: str = Depends(get_correlation_id), session=Depends(get_db_session), identity: Identity = Depends(require_action("write", "channels"))):
+    _ = await _require_idea(idea_id, correlation_id, identity, session)
+    if payload.angle is not None:
+        row = {
+            "id": payload.angle_id or _uuid.uuid4(),
+            "content_idea_id": idea_id,
+            "channel_id": _.get("channel_id") if isinstance(_, dict) else _.channel_id,
+            "video_project_id": _.get("video_project_id") if isinstance(_, dict) else _.video_project_id,
+            "angle": payload.angle,
+            "status": "proposed",
+            "approved": False,
+            "override": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+    else:
+        rows = _memory_angles.get(idea_id, [])
+        row = next((r for r in rows if r["id"] == payload.angle_id), None)
+        if row is None:
+            raise structured_error(404, "ANGLE_NOT_FOUND", "Angle not found", correlation_id)
+    row["evaluation"] = _score_angle_payload(row["angle"]).model_dump()
+    row["updated_at"] = datetime.now(timezone.utc)
+    return AngleOut.model_validate(row)
+
+
+@router.get("/api/v1/ideas/{idea_id}/angles", response_model=list[AngleOut], tags=["content-ideas"])
+async def list_idea_angles(idea_id: UUID, correlation_id: str = Depends(get_correlation_id), session=Depends(get_db_session), identity: Identity = Depends(require_action("read", "channels"))):
+    _ = await _require_idea(idea_id, correlation_id, identity, session)
+    if session is None:
+        return [AngleOut.model_validate(r) for r in _memory_angles.get(idea_id, [])]
+    rows = (await session.execute(select(Angle).where(Angle.angle["content_idea_id"].astext == str(idea_id)).order_by(Angle.created_at.asc()))).scalars().all()
+    return [AngleOut.model_validate(r.angle) for r in rows]
+
+
+@router.post("/api/v1/ideas/{idea_id}/angles/approve", response_model=AngleOut, tags=["content-ideas"])
+async def approve_idea_angle(idea_id: UUID, payload: AngleApprovalPayload, correlation_id: str = Depends(get_correlation_id), session=Depends(get_db_session), identity: Identity = Depends(require_action("write", "channels"))):
+    _ = await _require_idea(idea_id, correlation_id, identity, session)
+    rows = _memory_angles.get(idea_id, [])
+    row = next((r for r in rows if r["id"] == payload.angle_id), None)
+    if row is None:
+        raise structured_error(404, "ANGLE_NOT_FOUND", "Angle not found", correlation_id)
+    evaluation = row.get("evaluation") or _score_angle_payload(row["angle"]).model_dump()
+    if not evaluation.get("gate_passed"):
+        blocked = ",".join(evaluation.get("blocked_reasons", []))
+        raise structured_error(409, "ANGLE_APPROVAL_BLOCKED", f"Angle failed deterministic gates: {blocked}", correlation_id)
+    row["evaluation"] = evaluation
+    row["approved"] = True
+    row["status"] = "approved"
+    row["updated_at"] = datetime.now(timezone.utc)
+    return AngleOut.model_validate(row)
+
+
+@router.post("/api/v1/ideas/{idea_id}/angles/override", response_model=AngleOut, tags=["content-ideas"])
+async def override_idea_angle(idea_id: UUID, payload: AngleOverridePayload, correlation_id: str = Depends(get_correlation_id), session=Depends(get_db_session), identity: Identity = Depends(require_action("write", "channels"))):
+    _ = await _require_idea(idea_id, correlation_id, identity, session)
+    rows = _memory_angles.get(idea_id, [])
+    row = next((r for r in rows if r["id"] == payload.angle_id), None)
+    if row is None:
+        raise structured_error(404, "ANGLE_NOT_FOUND", "Angle not found", correlation_id)
+    row["approved"] = True
+    row["status"] = "approved_override"
+    row["override"] = {"reason": payload.reason, "overridden_by": payload.overridden_by, "metadata": payload.metadata, "at": datetime.now(timezone.utc)}
+    row["updated_at"] = datetime.now(timezone.utc)
+    return AngleOut.model_validate(row)

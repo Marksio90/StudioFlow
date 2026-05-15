@@ -294,6 +294,57 @@ class ContentIdeaStatusChangePayload(BaseModel):
     status: str
 
 
+class AngleGeneratePayload(BaseModel):
+    prompt: str | None = None
+    count: int = Field(default=3, ge=1, le=10)
+
+
+class AngleEvaluatePayload(BaseModel):
+    angle_id: UUID | None = None
+    angle: dict | None = None
+
+    @model_validator(mode="after")
+    def validate_input(self):
+        if self.angle_id is None and self.angle is None:
+            raise ValueError("Either angle_id or angle is required")
+        return self
+
+
+class AngleApprovalPayload(BaseModel):
+    angle_id: UUID
+
+
+class AngleOverridePayload(BaseModel):
+    angle_id: UUID
+    reason: str = Field(min_length=3, max_length=1000)
+    overridden_by: UUID
+    metadata: dict = Field(default_factory=dict)
+
+
+class AngleEvaluationOut(BaseModel):
+    hook_clarity: float
+    novelty: float
+    audience_fit: float
+    risk: float
+    overall_score: float
+    gate_passed: bool
+    blocked_reasons: list[str] = Field(default_factory=list)
+
+
+class AngleOut(BaseModel):
+    id: UUID
+    content_idea_id: UUID
+    channel_id: UUID
+    video_project_id: UUID
+    angle: dict
+    status: str = "proposed"
+    evaluation: AngleEvaluationOut | None = None
+    approved: bool = False
+    override: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ContentIdeaListFilters(BaseModel):
     status: str | None = None
     content_pillar: str | None = None
