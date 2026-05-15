@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
-from app.db.models import ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
+from app.db.models import Approval, ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
 
 
 
@@ -44,6 +44,7 @@ class InMemoryVideoProjectRepository:
         self._channels: dict[str, dict] = {}  # key: "{org_id}:{channel_id}"
         self._plans: dict[UUID, str] = {}
         self._approval_decisions: dict[UUID, list[dict]] = {}
+        self._approvals: dict[UUID, dict] = {}
         self._compliance_reports: dict[UUID, dict] = {}
         self._analytics: dict[UUID, list[dict]] = {}
         self._publishing_plans: dict[UUID, dict] = {}
@@ -129,6 +130,16 @@ class InMemoryVideoProjectRepository:
 
     async def get_approval_decisions(self, project_id: UUID) -> list[dict]:
         return list(self._approval_decisions.get(project_id, []))
+
+    async def upsert_approval(self, project_id: UUID, status: ApprovalStatus, requested_at: datetime | None, decided_at: datetime | None, decided_by_user_id: UUID | None, latest_comment: str | None) -> dict:
+        row = self._approvals.get(project_id, {"video_project_id": project_id})
+        row.update({"status": status.value, "requested_at": requested_at, "decided_at": decided_at, "decided_by_user_id": decided_by_user_id, "latest_comment": latest_comment})
+        self._approvals[project_id] = row
+        return dict(row)
+
+    async def get_approval(self, project_id: UUID) -> dict | None:
+        row = self._approvals.get(project_id)
+        return dict(row) if row else None
 
     # ── Compliance ────────────────────────────────────────────────────────────
 
@@ -433,6 +444,25 @@ class DBVideoProjectRepository:
         row = ApprovalDecision(video_project_id=project_id,status=status,comment=comment,decided_by_user_id=decided_by_user_id)
         self.session.add(row); await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
         return {"status": status.value, "comment": comment}
+
+    async def upsert_approval(self, project_id: UUID, status: ApprovalStatus, requested_at: datetime | None, decided_at: datetime | None, decided_by_user_id: UUID | None, latest_comment: str | None):
+        row = await self.session.get(Approval, project_id)
+        if not row:
+            row = Approval(video_project_id=project_id)
+            self.session.add(row)
+        row.status = status
+        row.requested_at = requested_at
+        row.decided_at = decided_at
+        row.decided_by_user_id = decided_by_user_id
+        row.latest_comment = latest_comment
+        await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
+        return {"video_project_id": row.video_project_id, "status": row.status.value, "requested_at": row.requested_at, "decided_at": row.decided_at, "decided_by_user_id": row.decided_by_user_id, "latest_comment": row.latest_comment}
+
+    async def get_approval(self, project_id: UUID):
+        row = await self.session.get(Approval, project_id)
+        if not row:
+            return None
+        return {"video_project_id": row.video_project_id, "status": row.status.value, "requested_at": row.requested_at, "decided_at": row.decided_at, "decided_by_user_id": row.decided_by_user_id, "latest_comment": row.latest_comment}
     async def get_approval_decisions(self, project_id: UUID):
         rows = (await self.session.scalars(select(ApprovalDecision).where(ApprovalDecision.video_project_id == project_id).order_by(ApprovalDecision.created_at.asc(), ApprovalDecision.id.asc()))).all()
         return [{"id": r.id, "video_project_id": r.video_project_id, "status": r.status.value, "comment": r.comment, "decided_by_user_id": r.decided_by_user_id, "created_at": r.created_at} for r in rows]

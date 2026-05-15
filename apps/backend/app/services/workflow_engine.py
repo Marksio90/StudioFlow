@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.db.enums import ApprovalStatus, VideoProjectStatus
@@ -32,7 +33,10 @@ class WorkflowEngine:
         if blocking:
             from fastapi import HTTPException
             raise HTTPException(status_code=409, detail=f"Cannot approve: compliance blocking issues present: {blocking}")
+        now = datetime.now(timezone.utc)
+        current = await self.repo.get_approval(video_project_id)
         await self.repo.add_approval_decision(video_project_id, ApprovalStatus.approved, comment, decided_by_user_id)
+        await self.repo.upsert_approval(video_project_id, ApprovalStatus.approved, current["requested_at"] if current else None, now, decided_by_user_id, comment)
         project = await self.repo.update_project_status(video_project_id, VideoProjectStatus.approved)
         run = await self.repo.get_latest_workflow_run(video_project_id)
         if run:
@@ -40,7 +44,10 @@ class WorkflowEngine:
         return project
 
     async def reject(self, video_project_id: UUID, comment: str | None, decided_by_user_id: UUID) -> dict:
+        now = datetime.now(timezone.utc)
+        current = await self.repo.get_approval(video_project_id)
         await self.repo.add_approval_decision(video_project_id, ApprovalStatus.rejected, comment, decided_by_user_id)
+        await self.repo.upsert_approval(video_project_id, ApprovalStatus.rejected, current["requested_at"] if current else None, now, decided_by_user_id, comment)
         project = await self.repo.update_project_status(video_project_id, VideoProjectStatus.rejected)
         run = await self.repo.get_latest_workflow_run(video_project_id)
         if run:
@@ -48,7 +55,10 @@ class WorkflowEngine:
         return project
 
     async def needs_changes(self, video_project_id: UUID, comment: str | None, decided_by_user_id: UUID) -> dict:
+        now = datetime.now(timezone.utc)
+        current = await self.repo.get_approval(video_project_id)
         await self.repo.add_approval_decision(video_project_id, ApprovalStatus.needs_changes, comment, decided_by_user_id)
+        await self.repo.upsert_approval(video_project_id, ApprovalStatus.needs_changes, current["requested_at"] if current else None, now, decided_by_user_id, comment)
         project = await self.repo.update_project_status(video_project_id, VideoProjectStatus.needs_changes)
         run = await self.repo.get_latest_workflow_run(video_project_id)
         if run:

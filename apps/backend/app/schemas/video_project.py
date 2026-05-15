@@ -19,6 +19,15 @@ class VideoProjectUpdate(BaseModel):
     status: Optional[VideoProjectStatus] = None
 
 
+class ApprovalAggregateOut(BaseModel):
+    video_project_id: UUID
+    status: str
+    requested_at: datetime | None = None
+    decided_at: datetime | None = None
+    decided_by_user_id: UUID | None = None
+    latest_comment: str | None = None
+
+
 class VideoProjectOut(BaseModel):
     id: UUID
     organization_id: UUID
@@ -26,6 +35,7 @@ class VideoProjectOut(BaseModel):
     channel_id: UUID
     title: str
     status: VideoProjectStatus
+    approval: ApprovalAggregateOut | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -72,6 +82,8 @@ class ComplianceReportOut(BaseModel):
     reasons: list[str]
     recommendations: list[str]
     blocking_issues: list[str]
+
+
 
 
 class ApprovalDecisionIn(BaseModel):

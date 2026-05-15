@@ -18,6 +18,7 @@ def test_required_tables_exist() -> None:
         "workflow_steps",
         "workflow_events",
         "approval_decisions",
+        "approvals",
         "llm_calls",
         "llm_cost_ledger_entries",
         "youtube_quota_ledger_entries",

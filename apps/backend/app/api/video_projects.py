@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Response
 from app.api.deps import Identity, get_correlation_id, get_video_project_service, require_action
 from app.api.errors import structured_error
 from app.db.enums import VideoProjectStatus
-from app.schemas.video_project import AnalyticsSnapshotIn, AnalyticsSnapshotOut, ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, PublishingPlanCreate, PublishingPlanOut, PublishingPlanSchedule, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
+from app.schemas.video_project import AnalyticsSnapshotIn, AnalyticsSnapshotOut, ApprovalAggregateOut, ApprovalDecisionIn, ApprovalDecisionOut, ComplianceReportOut, PaginatedVideoProjects, PublishingPlanCreate, PublishingPlanOut, PublishingPlanSchedule, VideoProjectCreate, VideoProjectOut, VideoProjectUpdate, WorkflowEventOut
 from app.services.video_project_service import VideoProjectService
 
 router = APIRouter(prefix="/api/v1/video-projects", tags=["video-projects"])
@@ -82,6 +82,12 @@ async def reject(project_id: UUID, payload: ApprovalDecisionIn, service: VideoPr
 async def needs_changes(project_id: UUID, payload: ApprovalDecisionIn, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id), identity: Identity = Depends(require_action("write", "video-projects"))): 
     await _require_project(service, project_id, correlation_id, identity)
     return await service.needs_changes(project_id, payload.comment, payload.decided_by_user_id)
+
+
+@router.get("/{project_id}/approval", response_model=ApprovalAggregateOut | None)
+async def approval(project_id: UUID, service: VideoProjectService = Depends(get_video_project_service), correlation_id: str = Depends(get_correlation_id), identity: Identity = Depends(require_action("read", "video-projects"))):
+    await _require_project(service, project_id, correlation_id, identity)
+    return await service.get_approval(project_id)
 
 
 @router.get("/{project_id}/approval-decisions", response_model=list[ApprovalDecisionOut])
