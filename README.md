@@ -80,6 +80,7 @@ CI (GitHub Actions) runs:
 - `packages/shared` — shared contracts/types placeholder
 - `infra` — infrastructure scripts
 - `docs` — product, compliance, and architecture documentation
+  - Channel Workspace: `docs/product/channel-workspace.md`
 
 ## Compliance and approval workflow
 
