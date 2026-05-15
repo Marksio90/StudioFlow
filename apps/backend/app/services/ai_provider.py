@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 class LLMMessage(BaseModel):
     role: str
     content: str
+    trusted: bool = True
 
 
 class LLMRequest(BaseModel):
@@ -17,6 +18,32 @@ class LLMRequest(BaseModel):
     system_prompt: str | None = None
     user_content: str | None = None
     provider_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+UNTRUSTED_USER_PREFIX = "[UNTRUSTED USER CONTENT]\n"
+
+
+class MessageConstructor:
+    """Construct provider messages while preserving trust boundaries."""
+
+    @staticmethod
+    def build(request: LLMRequest) -> list[dict[str, str]]:
+        built: list[dict[str, str]] = []
+        if request.system_prompt:
+            built.append({"role": "system", "content": request.system_prompt})
+        if request.messages:
+            for msg in request.messages:
+                built.append({"role": msg.role, "content": MessageConstructor._render_content(msg)})
+            return built
+        if request.user_content:
+            built.append({"role": "user", "content": UNTRUSTED_USER_PREFIX + request.user_content})
+        return built
+
+    @staticmethod
+    def _render_content(message: LLMMessage) -> str:
+        if message.role == "user" and not message.trusted:
+            return UNTRUSTED_USER_PREFIX + message.content
+        return message.content
 
 
 class LLMUsage(BaseModel):
@@ -64,14 +91,7 @@ class OpenAICompatibleProvider:
         return self._normalize_response(raw_payload)
 
     def _build_messages(self, request: LLMRequest) -> list[dict[str, str]]:
-        if request.messages:
-            return [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        built: list[dict[str, str]] = []
-        if request.system_prompt:
-            built.append({"role": "system", "content": request.system_prompt})
-        if request.user_content:
-            built.append({"role": "user", "content": request.user_content})
-        return built
+        return MessageConstructor.build(request)
 
     def _normalize_response(self, payload: dict[str, Any]) -> LLMResponse:
         choice = (payload.get("choices") or [{}])[0]
@@ -129,14 +149,7 @@ class OllamaProvider:
         )
 
     def _build_messages(self, request: LLMRequest) -> list[dict[str, str]]:
-        if request.messages:
-            return [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        built: list[dict[str, str]] = []
-        if request.system_prompt:
-            built.append({"role": "system", "content": request.system_prompt})
-        if request.user_content:
-            built.append({"role": "user", "content": request.user_content})
-        return built
+        return MessageConstructor.build(request)
 
 
 class MockLLMProvider:

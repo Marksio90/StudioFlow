@@ -125,7 +125,7 @@ class TrackedLLMClient:
                 version="v1",
                 variables={"task_type": task_type, "payload_json": payload_json},
             )
-            messages = [LLMMessage(role="user", content=user_payload)]
+            messages = [LLMMessage(role="user", content=user_payload, trusted=False)]
         else:
             system_prompt, user_payload = self.prompt_registry.render(
                 name="agent_repair_json",
@@ -135,7 +135,7 @@ class TrackedLLMClient:
                     "invalid_output_json": serialize_untrusted_block(repair_input),
                 },
             )
-            messages = [LLMMessage(role="user", content=user_payload)]
+            messages = [LLMMessage(role="user", content=user_payload, trusted=False)]
         request = LLMRequest(
             task_type=task_type,
             system_prompt=system_prompt,
