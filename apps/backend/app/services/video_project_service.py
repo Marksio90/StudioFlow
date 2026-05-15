@@ -90,7 +90,36 @@ class VideoProjectService:
         return await self.analytics_service.save_snapshot(project_id, payload)
 
     async def create_publishing_plan(self, payload: dict):
-        return await self.repo.create_publishing_plan(payload)
+        plan = await self.repo.create_publishing_plan(payload)
+        await self._assert_package_complete(plan, required=False)
+        return plan
+
+    async def _assert_package_complete(self, plan: dict, required: bool = True):
+        package_field_names = (
+            "selected_title_variant_id",
+            "selected_thumbnail_concept_id",
+            "final_description_snapshot",
+            "final_tags_snapshot",
+            "compliance_report_id",
+            "asset_bundle_metadata",
+        )
+        if not required and not any(plan.get(field) is not None for field in package_field_names):
+            return
+        missing_fields: list[str] = []
+        if not plan.get("selected_title_variant_id"):
+            missing_fields.append("selected_title_variant_id")
+        if not plan.get("selected_thumbnail_concept_id"):
+            missing_fields.append("selected_thumbnail_concept_id")
+        if not plan.get("final_description_snapshot"):
+            missing_fields.append("final_description_snapshot")
+        if not plan.get("final_tags_snapshot"):
+            missing_fields.append("final_tags_snapshot")
+        if not plan.get("compliance_report_id"):
+            missing_fields.append("compliance_report_id")
+        if not plan.get("asset_bundle_metadata"):
+            missing_fields.append("asset_bundle_metadata")
+        if missing_fields:
+            raise ValueError(f"Publishing package is incomplete: {', '.join(missing_fields)}")
 
     async def schedule_publishing(self, plan_id: UUID, scheduled_at):
         plan = await self.repo.get_publishing_plan(plan_id)
@@ -102,6 +131,7 @@ class VideoProjectService:
         compliance = await self.repo.get_compliance(project_id)
         if compliance["risk_level"] == ComplianceRiskLevel.blocked:
             raise ValueError("Project is compliance blocked")
+        await self._assert_package_complete(plan)
         return await self.repo.update_publishing_plan(plan_id, {"scheduled_at": scheduled_at, "status": PublishingPlanStatus.scheduled})
 
     async def publish_video(self, plan_id: UUID):
@@ -115,6 +145,7 @@ class VideoProjectService:
         compliance = await self.repo.get_compliance(plan["video_project_id"])
         if compliance["risk_level"] == ComplianceRiskLevel.blocked:
             raise ValueError("Project is compliance blocked")
+        await self._assert_package_complete(plan)
         await self.repo.update_publishing_plan(plan_id, {"status": PublishingPlanStatus.uploading})
         metrics.inc("quota_usage", 1)
         await self.quota_service.log_call(
