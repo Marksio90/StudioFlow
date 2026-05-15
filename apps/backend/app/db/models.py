@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -309,9 +309,50 @@ class ResearchBrief(Base, UUIDMixin, TimestampMixin):
 
 class Angle(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "angles"
+    __table_args__ = (
+        CheckConstraint("originality_score >= 0 AND originality_score <= 10", name="ck_angles_originality_score_range"),
+        CheckConstraint("differentiation_score >= 0 AND differentiation_score <= 10", name="ck_angles_differentiation_score_range"),
+        CheckConstraint(
+            "viewer_transformation_score >= 0 AND viewer_transformation_score <= 10",
+            name="ck_angles_viewer_transformation_score_range",
+        ),
+        CheckConstraint("evidence_strength_score >= 0 AND evidence_strength_score <= 10", name="ck_angles_evidence_strength_score_range"),
+        CheckConstraint("human_judgment_score >= 0 AND human_judgment_score <= 10", name="ck_angles_human_judgment_score_range"),
+        CheckConstraint("generic_content_risk >= 0 AND generic_content_risk <= 10", name="ck_angles_generic_content_risk_range"),
+        CheckConstraint("overall_angle_score >= 0 AND overall_angle_score <= 10", name="ck_angles_overall_angle_score_range"),
+        Index("ix_angles_idea_created_at", "idea_id", "created_at"),
+        Index("ix_angles_approval_state", "approved_at", "override_at"),
+    )
+
     video_project_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=True)
     channel_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=True)
-    angle: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    idea_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_ideas.id"), index=True, nullable=False)
+
+    main_insight: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    viewer_transformation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    contradiction: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    emotional_pull: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    differentiator: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    evidence_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    human_judgment: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    originality_score: Mapped[float] = mapped_column(Float, nullable=False)
+    differentiation_score: Mapped[float] = mapped_column(Float, nullable=False)
+    viewer_transformation_score: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence_strength_score: Mapped[float] = mapped_column(Float, nullable=False)
+    human_judgment_score: Mapped[float] = mapped_column(Float, nullable=False)
+    generic_content_risk: Mapped[float] = mapped_column(Float, nullable=False)
+    overall_angle_score: Mapped[float] = mapped_column(Float, nullable=False)
+    recommendation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    override_by: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Deprecated compatibility field preserved for existing callers.
+    angle: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class HookVariant(Base, UUIDMixin, TimestampMixin):
