@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
@@ -30,7 +31,11 @@ class VideoProjectService:
         return await self.repo.create(payload.model_dump())
 
     async def get_project(self, project_id: UUID):
-        return await self.repo.get(project_id)
+        project = await self.repo.get(project_id)
+        if not project:
+            return None
+        project["approval"] = await self.repo.get_approval(project_id)
+        return project
 
     async def update_project(self, project_id: UUID, payload: VideoProjectUpdate):
         return await self.repo.update(project_id, payload.model_dump(exclude_unset=True))
@@ -44,8 +49,10 @@ class VideoProjectService:
         return started
 
     async def request_approval(self, project_id: UUID):
+        now = datetime.now(timezone.utc)
         await self.repo.add_approval_decision(project_id, status=ApprovalStatus.awaiting_review, comment="Approval requested", decided_by_user_id=SYSTEM_USER_ID)
-        return await self.repo.update(project_id, {"status": VideoProjectStatus.awaiting_review})
+        await self.repo.upsert_approval(project_id, status=ApprovalStatus.awaiting_review, requested_at=now, decided_at=None, decided_by_user_id=None, latest_comment="Approval requested")
+        return await self.get_project(project_id)
 
     async def approve(self, project_id: UUID, comment: str | None, decided_by_user_id: UUID):
         metrics.observe("approval_latency", 0.0)
@@ -63,6 +70,9 @@ class VideoProjectService:
 
     async def get_approval_decisions(self, project_id: UUID):
         return await self.repo.get_approval_decisions(project_id)
+
+    async def get_approval(self, project_id: UUID):
+        return await self.repo.get_approval(project_id)
 
     async def get_costs(self, project_id: UUID):
         return await self.repo.get_costs(project_id)

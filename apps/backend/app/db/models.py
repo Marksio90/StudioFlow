@@ -129,6 +129,16 @@ class ApprovalDecision(Base, UUIDMixin, TimestampMixin):
     decided_by_user_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
 
+class Approval(Base):
+    __tablename__ = "approvals"
+    video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), primary_key=True)
+    status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus), default=ApprovalStatus.awaiting_review, nullable=False)
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by_user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    latest_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class LLMCall(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "llm_calls"
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
