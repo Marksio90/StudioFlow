@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from app.api.channels import router as channels_router
 from app.api.video_projects import router as video_projects_router
 from app.api.usage import router as usage_router
 from app.observability import configure_logging, correlation_id_var
@@ -64,6 +65,7 @@ app.add_middleware(
 )
 
 app.include_router(video_projects_router)
+app.include_router(channels_router)
 app.include_router(usage_router)
 
 
