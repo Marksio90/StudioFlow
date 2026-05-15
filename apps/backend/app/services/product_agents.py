@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest, MockLLMProvider
 from app.services.model_router import ModelRouter
 
 
@@ -51,22 +52,6 @@ class NoopCostTracker:
         self.events.append(event)
 
 
-class MockLLMProvider:
-    """Deterministic mock provider used by unit tests and local workflows."""
-
-    def __init__(self, failures_before_success: int = 0) -> None:
-        self.failures_before_success = failures_before_success
-        self.calls = 0
-
-    def generate(self, *, agent_name: str, payload: dict) -> dict:
-        self.calls += 1
-        if self.calls <= self.failures_before_success:
-            raise RuntimeError(f"mocked transient failure for {agent_name}")
-
-        # Echoes payload into a predictable envelope that each agent maps to schema.
-        return {"agent_name": agent_name, "payload": payload, "call": self.calls}
-
-
 @dataclass
 class LLMRequestContext:
     organization_id: UUID
@@ -76,18 +61,26 @@ class LLMRequestContext:
 
 
 class TrackedLLMClient:
-    def __init__(self, provider: MockLLMProvider, model_router: ModelRouter | None = None, cost_tracker: CostTracker | None = None) -> None:
+    def __init__(self, provider: LLMProvider, model_router: ModelRouter | None = None, cost_tracker: CostTracker | None = None) -> None:
         self.provider = provider
         self.model_router = model_router or ModelRouter()
         self.cost_tracker = cost_tracker or NoopCostTracker()
 
     def generate(self, *, task_type: str, payload: dict, context: LLMRequestContext) -> dict:
         started = perf_counter()
-        raw = self.provider.generate(agent_name=task_type, payload=payload)
+        request = LLMRequest(
+            task_type=task_type,
+            system_prompt=f"Task: {task_type}",
+            user_content=str(payload),
+            messages=[LLMMessage(role="user", content=str(payload))],
+            provider_metadata={"task_type": task_type},
+        )
+        response = self.provider.generate(request)
+        raw = response.parsed_json or {"raw_text": response.raw_text}
         latency_ms = int((perf_counter() - started) * 1000)
         model = self.model_router.resolve(task_type=task_type)
         input_tokens = max(1, len(str(payload)) // 4)
-        output_tokens = max(1, len(str(raw)) // 4)
+        output_tokens = response.usage.output_tokens or max(1, len(str(raw)) // 4)
         est_cost = Decimal(input_tokens * 0.0000002 + output_tokens * 0.0000008).quantize(Decimal("0.00000001"))
         request_hash = sha256(f"{task_type}:{payload}".encode()).hexdigest()
         self.cost_tracker.record(LLMCallRecord(
@@ -95,7 +88,7 @@ class TrackedLLMClient:
             workspace_id=context.workspace_id,
             video_project_id=context.video_project_id,
             workflow_run_id=context.workflow_run_id,
-            provider="mock-openai",
+            provider=response.provider_metadata.get("provider", "unknown"),
             model=model,
             task_type=task_type,
             input_tokens=input_tokens,
@@ -153,7 +146,7 @@ class ResearchAgent(BaseAgent):
             angles=["problem/solution", "case study"],
             search_intent=f"Użytkownik chce zrozumieć: {data.topic}",
             target_audience=data.target_audience,
-            risk_notes=[f"mock_call={raw['call']}", "zweryfikować źródła danych"],
+            risk_notes=[f"mock_call={raw.get('call', 'n/a')}", "zweryfikować źródła danych"],
         )
 
 
@@ -282,7 +275,7 @@ class ProductWorkflowResult(BaseModel):
 
 
 class ProductWorkflow:
-    def __init__(self, provider: MockLLMProvider, context: LLMRequestContext, retry: RetryPolicy | None = None, cost_tracker: CostTracker | None = None) -> None:
+    def __init__(self, provider: LLMProvider, context: LLMRequestContext, retry: RetryPolicy | None = None, cost_tracker: CostTracker | None = None) -> None:
         tracked = TrackedLLMClient(provider, model_router=ModelRouter(), cost_tracker=cost_tracker)
         self.research = ResearchAgent(tracked, context=context, retry=retry)
         self.script = ScriptAgent(tracked, context=context, retry=retry)
