@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
-from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
+from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, TopicResearchRecommendation, VideoProjectStatus
 
 
 class Organization(Base, UUIDMixin, TimestampMixin):
@@ -197,6 +197,37 @@ class LLMCall(Base, UUIDMixin, TimestampMixin):
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     related_entity_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     related_entity_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+class TopicResearchReport(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "topic_research_reports"
+    __table_args__ = (
+        Index("ix_topic_research_reports_idea_id_created_at_desc", "idea_id", created_at.desc()),
+    )
+
+    idea_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_ideas.id"), index=True, nullable=False)
+
+    search_intent_score: Mapped[float] = mapped_column(Float, nullable=False)
+    viewer_curiosity_score: Mapped[float] = mapped_column(Float, nullable=False)
+    emotional_pull_score: Mapped[float] = mapped_column(Float, nullable=False)
+    evergreen_score: Mapped[float] = mapped_column(Float, nullable=False)
+    series_potential_score: Mapped[float] = mapped_column(Float, nullable=False)
+    difficulty_score: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence_required_score: Mapped[float] = mapped_column(Float, nullable=False)
+    generic_risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+    overall_topic_score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    recommendation: Mapped[TopicResearchRecommendation] = mapped_column(Enum(TopicResearchRecommendation), nullable=False)
+
+    topic_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    target_viewer: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    viewer_problem: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    viewer_promise: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    curiosity_drivers: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    missing_evidence: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    possible_content_angles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    risk_of_generic_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    recommended_next_step: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
 class LLMCostLedgerEntry(Base, UUIDMixin, TimestampMixin):

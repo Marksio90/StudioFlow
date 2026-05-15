@@ -40,3 +40,10 @@ class PublishingPlanStatus(str, Enum):
     published = "published"
     failed = "failed"
     cancelled = "cancelled"
+
+
+class TopicResearchRecommendation(str, Enum):
+    approved = "approved"
+    needs_more_research = "needs_more_research"
+    too_generic = "too_generic"
+    reject = "reject"
