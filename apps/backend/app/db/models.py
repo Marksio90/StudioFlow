@@ -171,9 +171,25 @@ class Approval(Base):
 class LLMCall(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "llm_calls"
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     model: Mapped[str] = mapped_column(String(128), nullable=False)
-    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
-    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    prompt_template_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    prompt_template_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    input_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    input_preview: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    output_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    output_preview: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="success")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    related_entity_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    related_entity_id: Mapped[str | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
 class LLMCostLedgerEntry(Base, UUIDMixin, TimestampMixin):

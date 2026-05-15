@@ -71,6 +71,7 @@ class LLMCallRecord:
 
 class CostTracker(Protocol):
     def record(self, event: LLMCallRecord) -> None: ...
+    def record_failure(self, event: dict[str, Any]) -> None: ...
 
 
 class NoopCostTracker:
@@ -79,6 +80,9 @@ class NoopCostTracker:
 
     def record(self, event: LLMCallRecord) -> None:
         self.events.append(event)
+
+    def record_failure(self, event: dict[str, Any]) -> None:
+        return None
 
 
 @dataclass
@@ -120,6 +124,19 @@ class TrackedLLMClient:
         try:
             response = self.provider.generate(request)
         except Exception as exc:  # noqa: BLE001
+            self.cost_tracker.record_failure(
+                {
+                    "provider": llm_config.provider,
+                    "model": llm_config.model,
+                    "prompt_template_name": task_type,
+                    "input_hash": sha256(str(payload).encode()).hexdigest(),
+                    "status": "failed",
+                    "error_message": str(exc),
+                    "trace_id": trace_id,
+                    "related_entity_type": "workflow_run",
+                    "related_entity_id": context.workflow_run_id,
+                }
+            )
             raise LLMProviderError(
                 "LLM provider request failed",
                 context=LLMErrorContext(provider=llm_config.provider, model=llm_config.model, task_type=task_type, trace_id=trace_id),
@@ -136,6 +153,20 @@ class TrackedLLMClient:
             )
             raw = repaired
         if raw is None:
+            self.cost_tracker.record_failure(
+                {
+                    "provider": llm_config.provider,
+                    "model": llm_config.model,
+                    "prompt_template_name": task_type,
+                    "input_hash": sha256(str(payload).encode()).hexdigest(),
+                    "output_hash": sha256((response.raw_text or "").encode()).hexdigest(),
+                    "status": "failed",
+                    "error_message": "Failed to parse model output as JSON",
+                    "trace_id": trace_id,
+                    "related_entity_type": "workflow_run",
+                    "related_entity_id": context.workflow_run_id,
+                }
+            )
             raise LLMParseError(
                 "Failed to parse model output as JSON",
                 context=LLMErrorContext(provider=llm_config.provider, model=llm_config.model, task_type=task_type, trace_id=trace_id),

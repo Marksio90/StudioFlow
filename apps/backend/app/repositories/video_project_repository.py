@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import uuid as _uuid
 from datetime import datetime, timezone
+from hashlib import sha256
+import json
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStatus, VideoProjectStatus
-from app.db.models import Approval, ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
+from app.db.models import Approval, ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCall, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
 
 
 
@@ -36,6 +38,21 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _safe_preview(value: object, max_len: int = 512) -> str | None:
+    if value is None:
+        return None
+    raw = value if isinstance(value, str) else json.dumps(value, default=str)
+    text = raw.replace("\n", " ").strip()
+    return text[:max_len]
+
+
+def _hash_value(value: object) -> str | None:
+    if value is None:
+        return None
+    raw = value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
+    return sha256(raw.encode("utf-8")).hexdigest()
+
+
 class InMemoryVideoProjectRepository:
     """Standalone in-memory repository for unit tests that run without a real database."""
 
@@ -53,6 +70,7 @@ class InMemoryVideoProjectRepository:
         self._events: dict[UUID, list[dict]] = {}
         self._task_executions: dict[str, object] = {}
         self._llm_costs: dict[UUID, list[float]] = {}
+        self._llm_calls: dict[UUID, list[dict]] = {}
         self.youtube_quota_ledger_entries: list[dict] = []
 
     # ── Plan management ───────────────────────────────────────────────────────
@@ -304,7 +322,30 @@ class InMemoryVideoProjectRepository:
     # ── LLM cost tracking ─────────────────────────────────────────────────────
 
     async def log_llm_call(self, project_id: UUID, call: dict) -> None:
-        return None
+        normalized = {
+            "video_project_id": project_id,
+            "provider": call.get("provider", "unknown"),
+            "model": call.get("model", "unknown"),
+            "prompt_template_name": call.get("prompt_template_name"),
+            "prompt_template_version": call.get("prompt_template_version"),
+            "input_hash": call.get("input_hash") or _hash_value(call.get("input")),
+            "input_preview": call.get("input_preview") or _safe_preview(call.get("input")),
+            "output_hash": call.get("output_hash") or _hash_value(call.get("output")),
+            "output_preview": call.get("output_preview") or _safe_preview(call.get("output")),
+            "prompt_tokens": call.get("prompt_tokens"),
+            "completion_tokens": call.get("completion_tokens"),
+            "total_tokens": call.get("total_tokens"),
+            "estimated_cost_usd": call.get("estimated_cost_usd"),
+            "latency_ms": call.get("latency_ms"),
+            "status": call.get("status", "success"),
+            "error_message": call.get("error_message"),
+            "trace_id": call.get("trace_id"),
+            "request_id": call.get("request_id"),
+            "related_entity_type": call.get("related_entity_type"),
+            "related_entity_id": call.get("related_entity_id"),
+            "created_at": _now(),
+        }
+        self._llm_calls.setdefault(project_id, []).append(normalized)
 
     async def log_llm_cost_entry(self, project_id: UUID, entry: dict) -> None:
         self._llm_costs.setdefault(project_id, []).append(entry.get("cost_usd", 0.0))
@@ -408,7 +449,31 @@ class DBVideoProjectRepository:
         )
         rows = (await self.session.scalars(stmt)).all()
         return [{"id": r.id, "workflow_run_id": r.workflow_run_id, "event_type": r.event_type, "payload": r.payload, "created_at": r.created_at} for r in rows]
-    async def log_llm_call(self, project_id: UUID, call: dict): return None
+    async def log_llm_call(self, project_id: UUID, call: dict):
+        row = LLMCall(
+            video_project_id=project_id,
+            provider=call.get("provider", "unknown"),
+            model=call.get("model", "unknown"),
+            prompt_template_name=call.get("prompt_template_name"),
+            prompt_template_version=call.get("prompt_template_version"),
+            input_hash=call.get("input_hash") or _hash_value(call.get("input")),
+            input_preview=call.get("input_preview") or _safe_preview(call.get("input")),
+            output_hash=call.get("output_hash") or _hash_value(call.get("output")),
+            output_preview=call.get("output_preview") or _safe_preview(call.get("output")),
+            prompt_tokens=call.get("prompt_tokens"),
+            completion_tokens=call.get("completion_tokens"),
+            total_tokens=call.get("total_tokens"),
+            estimated_cost_usd=call.get("estimated_cost_usd"),
+            latency_ms=call.get("latency_ms"),
+            status=call.get("status", "success"),
+            error_message=call.get("error_message"),
+            trace_id=call.get("trace_id"),
+            request_id=call.get("request_id"),
+            related_entity_type=call.get("related_entity_type"),
+            related_entity_id=call.get("related_entity_id"),
+        )
+        self.session.add(row)
+        await self.session.commit()
     async def log_llm_cost_entry(self, project_id: UUID, entry: dict):
         p = await self.get(project_id)
         self.session.add(LLMCostLedgerEntry(organization_id=p["organization_id"], workspace_id=p["workspace_id"], video_project_id=project_id, cost_usd=entry.get("cost_usd",0.0)))
