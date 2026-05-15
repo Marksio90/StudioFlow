@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,9 +36,23 @@ class Membership(Base, UUIDMixin, TimestampMixin):
 
 class Channel(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "channels"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "workspace_id", "slug", name="uq_channels_org_workspace_slug"),
+        Index("ix_channels_workspace_slug", "workspace_id", "slug"),
+    )
+
     organization_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), index=True, nullable=False)
     workspace_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("workspaces.id"), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    niche: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    language: Mapped[str] = mapped_column(String(32), nullable=False, default="en")
+    target_audience: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tone_of_voice: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    content_pillars: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    brand_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     youtube_channel_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
 
 
