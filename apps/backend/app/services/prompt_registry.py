@@ -89,5 +89,15 @@ def build_default_prompt_registry() -> PromptRegistry:
                 ),
                 user_template="Analyze this channel context and notes:\n{payload_json}",
             ),
+            PromptTemplate(
+                name="topic_research_analyze",
+                version="v1",
+                system_template=(
+                    "You are a topic research analyst. Return strict JSON only with no markdown. "
+                    "Allowed recommendation values: pursue, refine, reject. "
+                    "Required JSON shape: {\"recommendation\": string, \"rationale\": string, \"key_points\": string[], \"scores\": {\"demand_score\":0-100,\"competition_score\":0-100,\"novelty_score\":0-100,\"channel_fit_score\":0-100,\"execution_risk_score\":0-100,\"overall_score\":0-100}}."
+                ),
+                user_template="Analyze this topic idea against channel context and memory:\n{payload_json}",
+            ),
         ]
     )
