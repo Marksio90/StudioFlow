@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest, MockLLMProvider
 from app.services.model_router import ModelRouter
+from app.services.redaction import redacted_text
 
 
 class AgentExecutionError(RuntimeError):
@@ -124,6 +125,7 @@ class TrackedLLMClient:
         try:
             response = self.provider.generate(request)
         except Exception as exc:  # noqa: BLE001
+            redacted_error = redacted_text(str(exc))
             self.cost_tracker.record_failure(
                 {
                     "provider": llm_config.provider,
@@ -131,7 +133,7 @@ class TrackedLLMClient:
                     "prompt_template_name": task_type,
                     "input_hash": sha256(str(payload).encode()).hexdigest(),
                     "status": "failed",
-                    "error_message": str(exc),
+                    "error_message": redacted_error,
                     "trace_id": trace_id,
                     "related_entity_type": "workflow_run",
                     "related_entity_id": context.workflow_run_id,
@@ -140,7 +142,7 @@ class TrackedLLMClient:
             raise LLMProviderError(
                 "LLM provider request failed",
                 context=LLMErrorContext(provider=llm_config.provider, model=llm_config.model, task_type=task_type, trace_id=trace_id),
-            ) from exc
+            ) from RuntimeError(redacted_error)
         raw = response.parsed_json
         if raw is None:
             raw = self._parse_json_response(response.raw_text)
@@ -170,7 +172,7 @@ class TrackedLLMClient:
             raise LLMParseError(
                 "Failed to parse model output as JSON",
                 context=LLMErrorContext(provider=llm_config.provider, model=llm_config.model, task_type=task_type, trace_id=trace_id),
-                raw_output=response.raw_text,
+                raw_output=redacted_text(response.raw_text),
             )
         latency_ms = int((perf_counter() - started) * 1000)
         input_tokens = max(1, len(str(payload)) // 4)
