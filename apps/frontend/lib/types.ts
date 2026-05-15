@@ -50,7 +50,6 @@ export interface CreateProjectInput {
   targetAudience: string;
 }
 
-
 export interface AnalyticsSnapshot {
   id: string;
   videoProjectId: string;
@@ -66,3 +65,34 @@ export interface AnalyticsSnapshot {
   estimatedRevenue: number;
   snapshotAt: string;
 }
+
+export interface Channel {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  youtubeChannelId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateChannelInput { name: string; youtubeChannelId: string; }
+export interface UpdateChannelInput { name?: string; youtubeChannelId?: string; }
+
+export interface ChannelMemory {
+  channelId: string;
+  approvedTitlePatterns: string[];
+  rejectedTitlePatterns: string[];
+  thumbnailRules: Record<string, unknown>;
+  bannedPhrases: string[];
+  preferredPhrases: string[];
+  compliancePreferences: Record<string, unknown>;
+  narratorStyle: Record<string, unknown>;
+  visualStyle: Record<string, unknown>;
+  audienceObjections: string[];
+  bestPerformingPatterns: string[];
+  worstPerformingPatterns: string[];
+  freeformMemoryNotes: string[];
+}
+
+export type ChannelMemoryInput = Omit<ChannelMemory, 'channelId'>;
