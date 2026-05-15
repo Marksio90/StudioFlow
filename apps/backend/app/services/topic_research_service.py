@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from app.db.models import LLMCall
 from app.schemas.video_project import ContentIdeaOut
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest
 from app.services.model_router import ModelRouter
@@ -71,6 +73,7 @@ class TopicResearchService:
         content_idea: ContentIdeaOut,
         channel_context: dict[str, Any],
         channel_memory: dict[str, Any],
+        session: Any | None = None,
     ) -> TopicResearchOutput:
         payload = {
             "content_idea": content_idea.model_dump(mode="json"),
@@ -93,6 +96,28 @@ class TopicResearchService:
         )
 
         response = self.provider.generate(request)
+
+        if session is not None:
+            session.add(
+                LLMCall(
+                    video_project_id=content_idea.video_project_id,
+                    channel_id=content_idea.channel_id,
+                    provider=str(response.provider_metadata.get("provider", "unknown")),
+                    model=str(response.provider_metadata.get("model", "unknown")),
+                    prompt_template_name=self.PROMPT_NAME,
+                    prompt_template_version=self.PROMPT_VERSION,
+                    input_hash=hashlib.sha256(user_prompt.encode()).hexdigest(),
+                    input_preview=user_prompt[:500],
+                    output_hash=hashlib.sha256(response.raw_text.encode()).hexdigest(),
+                    output_preview=response.raw_text[:500],
+                    prompt_tokens=response.usage.input_tokens,
+                    completion_tokens=response.usage.output_tokens,
+                    total_tokens=response.usage.total_tokens or (response.usage.input_tokens + response.usage.output_tokens),
+                    related_entity_type="content_idea",
+                    related_entity_id=content_idea.id,
+                )
+            )
+
         raw_payload = response.parsed_json
         if raw_payload is None:
             try:
