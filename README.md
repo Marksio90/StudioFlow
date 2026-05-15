@@ -1,50 +1,74 @@
-# AI Media Operations OS
+# QualityTube OS
 
-AI Media Operations OS is a B2B/SaaS workflow platform for YouTube creators, small teams, and agencies.
+**Slogan:** *Create better YouTube videos with AI — not more spam.*
 
-> This project is **not** a “no-face monetization machine” or auto-earn system.
-> It is an operations layer for planning, quality control, publishing workflows, and analytics.
+QualityTube OS is an **AI-assisted, human-approved, compliance-aware YouTube content operations system** for creators, teams, and agencies that want better content quality, stronger editorial control, and lower policy risk.
 
-## Scope (foundation stage)
+## Product name
 
-- Content planning and workflow orchestration
-- AI-assisted research and script generation (with human approval)
-- SEO and compliance checkpoints
-- Publishing/scheduling pipeline
-- Analytics and operational reporting
-- AI cost control and YouTube API quota governance
-- Team collaboration and approvals
+QualityTube OS
 
-## Current implementation status
+## Short product description
 
-### Frontend (`apps/frontend`)
+QualityTube OS is an operations layer for research, scripting, review, publishing workflows, and analytics feedback in YouTube production environments where quality, originality, and policy compliance matter.
 
-- ✅ Next.js application starts and exposes the base UI shell.
-- ⚠️ Data persistence is currently **mocked via `localStorage`** (no production API contract enforced end-to-end).
-- ⚠️ Some views/components are in foundation mode and still rely on temporary/mock data flows.
+## Core philosophy
 
-### Backend (`apps/backend`)
+- AI accelerates execution, but humans own editorial decisions.
+- Compliance is a first-class product requirement, not a post-processing step.
+- Quality beats volume: repeatable systems should improve output standards, not flood platforms with low-value content.
 
-- ✅ FastAPI service starts and exposes core routes (including healthcheck).
-- ⚠️ Repository/persistence layer currently uses an **in-memory repository mock** for selected domains.
-- ⚠️ Full production persistence hardening (migrations, transactional guarantees, operational policies) is still in progress.
+## What the system does
 
-### Worker (`apps/worker`)
+- Supports structured planning and workflow orchestration.
+- Provides AI-assisted research and script generation with mandatory human checkpoints.
+- Enforces SEO and compliance review stages before publication.
+- Coordinates publishing/scheduling pipelines.
+- Tracks performance analytics and feeds insights back into planning.
+- Monitors AI usage cost and YouTube API quota consumption.
+- Enables team collaboration, ownership, and approval flows.
 
-- ✅ Celery worker starts and passes container healthcheck.
-- ⚠️ Background jobs include **placeholder task implementations** (stub logic for async pipelines).
-- ⚠️ Production-grade retry/idempotency and long-running workflow resilience are not fully completed.
+## What the system explicitly does not do
 
-## Monorepo layout
+- Does not promise monetization outcomes.
+- Does not automate channel growth without human work.
+- Does not provide one-click, no-review mass content publishing.
+- Does not position itself as a passive-income or “cash machine” tool.
 
-- `apps/frontend` — Next.js app
-- `apps/backend` — FastAPI API
-- `apps/worker` — Celery async worker
+## Target users
+
+- YouTube creators with repeatable production workflows.
+- Small in-house media teams.
+- Content agencies operating multi-channel pipelines.
+- Operators who need auditability, quality controls, and role-based approvals.
+
+## Core modules
+
+- Planning and briefing
+- Research and script generation
+- Compliance and quality review
+- Approval workflow and sign-off
+- Publishing/scheduling orchestration
+- Analytics and feedback loop
+- Cost/quota governance
+
+## MVP scope
+
+- End-to-end assisted pipeline for plan → draft → review → approve → publish.
+- Baseline compliance checkpoints for YouTube policy-sensitive areas.
+- Human approval requirements before publication.
+- Analytics ingestion and basic performance feedback into future planning.
+
+## Architecture overview
+
+- `apps/frontend` — Next.js operator interface
+- `apps/backend` — FastAPI orchestration and policy services
+- `apps/worker` — Celery async task execution
 - `packages/shared` — shared contracts/types placeholder
-- `infra` — infra scripts
-- `docs` — product and architecture docs
+- `infra` — infrastructure scripts
+- `docs` — product, compliance, and architecture documentation
 
-## Quick start
+## Local development quickstart
 
 1. Copy environment:
    ```bash
@@ -55,6 +79,12 @@ AI Media Operations OS is a B2B/SaaS workflow platform for YouTube creators, sma
    docker compose up --build
    ```
 
+## Environment variables overview
+
+- Local configuration is managed via `.env` (copied from `.env.example`).
+- Variables configure frontend/backend runtime behavior, infrastructure endpoints, API credentials, and local feature settings.
+- Treat secrets as sensitive and never commit secret values.
+
 ## Services
 
 - Frontend: http://localhost:3000
@@ -63,28 +93,9 @@ AI Media Operations OS is a B2B/SaaS workflow platform for YouTube creators, sma
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
 
-## Acceptance baseline
+## Testing commands
 
-- `docker compose up --build` starts all services
-- FastAPI responds on `/health`
-- Next.js frontend starts successfully
-- Celery worker starts and passes container healthcheck
-
-## Production-ready transition checklist
-
-- [ ] Frontend no longer relies on `localStorage` mocks for core workflows; all critical flows run against versioned backend APIs.
-- [ ] Backend in-memory repositories are replaced with durable PostgreSQL-backed implementations and covered by migration strategy.
-- [ ] Worker placeholder tasks are replaced by real pipeline tasks with explicit input/output contracts.
-- [ ] End-to-end tests cover at least one full content lifecycle (plan → generate → approve → publish).
-- [ ] Observability is enabled: structured logs, metrics, tracing, and alerting for FE/BE/worker.
-- [ ] Security baseline passes in CI: dependency scans, secret scanning, authz checks, and hardened config defaults.
-- [ ] Retry/idempotency policy is defined and validated for all async jobs.
-- [ ] Runbooks exist for incident response, rollback, and degraded-mode operations.
-- [ ] SLO/SLA targets are defined with error budgets and quota/cost guardrails.
-
-## Quality gates i testy
-
-Uruchamianie lokalne z poziomu repo:
+Run from repository root:
 
 ```bash
 make test
@@ -94,23 +105,43 @@ make lint
 make typecheck
 ```
 
-Zakres backend (pytest):
-- testy modeli
-- testy API
-- testy workflow
-- testy compliance
-- testy LLM cost tracking
-- testy approval
-- testy quota
+Backend coverage focus (pytest):
+- model tests
+- API tests
+- workflow tests
+- compliance tests
+- LLM cost tracking tests
+- approval tests
+- quota tests
 
-Frontend:
+Frontend checks:
 - TypeScript typecheck (`npm run typecheck`)
 - lint (`npm run lint`)
 
-CI (GitHub Actions) uruchamia:
+CI (GitHub Actions) runs:
 - backend lint/typecheck (`ruff check`, `mypy`)
 - backend tests
 - frontend typecheck
 - frontend lint
 - security checks (`pip-audit`, `npm audit --omit=dev`)
 - docker build
+
+## Compliance-first philosophy
+
+QualityTube OS is designed around policy-aware operations. Compliance checks are embedded into workflow stages so content is reviewed before publication decisions, not after incidents.
+
+## Human approval workflow
+
+AI outputs are drafts, not final artifacts. Human reviewers must approve publish-ready assets and can reject, request revision, or escalate policy concerns.
+
+## Quality gates
+
+Quality gates enforce minimum standards for:
+- originality and transformation value
+- factual and editorial quality
+- policy/compliance risk
+- metadata and packaging quality
+
+## Analytics feedback loop
+
+Post-publication performance is used to refine briefs, scripting standards, packaging decisions, and workflow templates. The goal is continuous quality improvement over repeated production cycles.
