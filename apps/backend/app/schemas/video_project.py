@@ -337,6 +337,29 @@ class ContentIdeaResponse(BaseModel):
         return payload
 
 
+class ContentIdeaResearchReportPayload(BaseModel):
+    summary: str = ""
+    audience_fit: str = ""
+    demand_signals: list[str] = Field(default_factory=list)
+    competition_notes: list[str] = Field(default_factory=list)
+    content_gaps: list[str] = Field(default_factory=list)
+    suggested_angles: list[str] = Field(default_factory=list)
+    source_queries: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0, ge=0, le=1)
+
+
+class ContentIdeaResearchAnalyzeResponse(BaseModel):
+    id: UUID
+    content_idea_id: UUID
+    channel_id: UUID
+    report: ContentIdeaResearchReportPayload
+    created_at: datetime
+
+
+class ContentIdeaResearchReportListResponse(BaseModel):
+    items: list[ContentIdeaResearchAnalyzeResponse]
+
+
 # Deprecated compatibility aliases for existing VideoIdea naming.
 VideoIdeaBase = ContentIdeaBase
 VideoIdeaCreate = ContentIdeaCreate
