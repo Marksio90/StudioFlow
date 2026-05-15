@@ -213,7 +213,21 @@ class MonetizationPlanCreate(ProjectScopedEntityBase):
 
 class ContentIdeaBase(BaseModel):
     video_project_id: UUID
-    idea_text: str = Field(min_length=1)
+    channel_id: UUID | None = None
+    title: str = Field(min_length=1, max_length=255)
+    description: str = ""
+    status: str = "idea"
+    content_pillar: str = ""
+    target_keyword: str = ""
+    viewer_problem: str = ""
+    viewer_promise: str = ""
+    notes: str = ""
+    niche_score: float = 0
+    topic_score: float = 0
+    originality_score: float = 0
+    risk_score: float = 0
+    # Backward-compatible alias field.
+    idea_text: str | None = None
 
 
 class ContentIdeaCreate(ContentIdeaBase):

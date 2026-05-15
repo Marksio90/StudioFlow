@@ -68,6 +68,21 @@ class VideoProject(Base, UUIDMixin, TimestampMixin):
 class ContentIdea(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "video_ideas"
     video_project_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_projects.id"), index=True, nullable=False)
+    channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled idea")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="idea")
+    content_pillar: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    target_keyword: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    viewer_problem: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    viewer_promise: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    niche_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    topic_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    originality_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+
+    # Deprecated compatibility field preserved for existing callers.
     idea_text: Mapped[str] = mapped_column(Text, nullable=False)
 
 
