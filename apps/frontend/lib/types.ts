@@ -39,6 +39,30 @@ export interface UpdateContentIdeaInput {
   contentPillar?: string;
 }
 
+export type IdeaResearchRecommendation =
+  | 'proceed'
+  | 'proceed_with_caution'
+  | 'do_not_proceed'
+  | 'needs_more_research';
+
+export interface IdeaResearchScores {
+  demandScore: number;
+  competitionScore: number;
+  evidenceScore: number;
+}
+
+export interface IdeaResearchReport {
+  id: string;
+  ideaId: string;
+  summary: string;
+  recommendation: IdeaResearchRecommendation;
+  scores: IdeaResearchScores;
+  missingEvidence: string[];
+  genericRisks: string[];
+  recommendedNextAction: string;
+  createdAt: string;
+}
+
 export interface ComplianceReport {
   score: number;
   riskLevel: RiskLevel;
