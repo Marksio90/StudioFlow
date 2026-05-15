@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import uuid as _uuid
 from datetime import datetime, timezone
 from uuid import UUID
@@ -12,6 +11,27 @@ from app.db.enums import ApprovalStatus, ComplianceRiskLevel, PublishingPlanStat
 from app.db.models import ApprovalDecision, AnalyticsSnapshot, Angle, AudioBrief, Channel, ChannelMemory, ComplianceReport, HookVariant, LLMCostLedgerEntry, Membership, MonetizationPlan, Organization, PublishingPlan, ResearchBrief, RetentionReview, TaskAttempt, TaskExecution, ThumbnailConcept, TitleVariant, VideoProject, VisualPlan, VisualScene, WorkflowEvent, WorkflowRun, WorkflowStep, YouTubeQuotaLedgerEntry
 
 
+
+
+def _default_compliance(project_id: UUID) -> dict:
+    return {
+        "video_project_id": project_id,
+        "score": 100,
+        "risk_level": ComplianceRiskLevel.low,
+        "requires_ai_disclosure": False,
+        "disclosure_decision_missing": False,
+        "ai_disclosure_risk": "low",
+        "inauthentic_content_risk": "low",
+        "repetitive_content_risk": "low",
+        "copyright_risk": "low",
+        "sensitive_claims_risk": "low",
+        "clickbait_risk": "low",
+        "asset_license_risk": "low",
+        "synthetic_media_realism_risk": "low",
+        "reasons": [],
+        "recommendations": [],
+        "blocking_issues": [],
+    }
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -116,7 +136,7 @@ class InMemoryVideoProjectRepository:
         row = self._compliance_reports.get(project_id)
         if row:
             return dict(row)
-        return {"video_project_id": project_id, "score": 100, "risk_level": ComplianceRiskLevel.low, "requires_ai_disclosure": False, "disclosure_decision_missing": False, "ai_disclosure_risk": "low", "inauthentic_content_risk": "low", "repetitive_content_risk": "low", "copyright_risk": "low", "sensitive_claims_risk": "low", "clickbait_risk": "low", "asset_license_risk": "low", "synthetic_media_realism_risk": "low", "reasons": [], "recommendations": [], "blocking_issues": []}
+        return _default_compliance(project_id)
 
     async def save_compliance_report(self, project_id: UUID, report: dict) -> dict:
         self._compliance_reports[project_id] = {"video_project_id": project_id, **report}
@@ -394,11 +414,11 @@ class DBVideoProjectRepository:
     async def get_compliance(self, project_id: UUID):
         row = (await self.session.scalars(select(ComplianceReport).where(ComplianceReport.video_project_id==project_id).order_by(ComplianceReport.created_at.desc()))).first()
         if row:
-            payload = json.loads(row.findings) if row.findings else {}
+            payload = row.payload or {}
             return {"video_project_id": project_id, **payload, "risk_level": row.risk_level}
-        return {"video_project_id":project_id,"score":100,"risk_level":ComplianceRiskLevel.low,"requires_ai_disclosure":False,"disclosure_decision_missing":False,"ai_disclosure_risk":"low","inauthentic_content_risk":"low","repetitive_content_risk":"low","copyright_risk":"low","sensitive_claims_risk":"low","clickbait_risk":"low","asset_license_risk":"low","synthetic_media_realism_risk":"low","reasons":[],"recommendations":[],"blocking_issues":[]}
+        return _default_compliance(project_id)
     async def save_compliance_report(self, project_id: UUID, report: dict):
-        row = ComplianceReport(video_project_id=project_id, risk_level=report.get("risk_level", ComplianceRiskLevel.low), findings=json.dumps(report, default=str))
+        row = ComplianceReport(video_project_id=project_id, risk_level=report.get("risk_level", ComplianceRiskLevel.low), payload=report, findings=None)
         self.session.add(row); await self.session.flush(); await self.session.commit(); await self.session.refresh(row)
         return report
     async def create_analytics_snapshot(self, payload: dict):
