@@ -2,13 +2,14 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import Layout from '../../components/Layout';
 import { apiClient } from '../../lib/apiClient';
-import { ContentIdea, IdeaResearchReport } from '../../lib/types';
+import { ContentIdea, IdeaAngle, IdeaResearchReport } from '../../lib/types';
 
-type TabKey = 'overview' | 'research';
+type TabKey = 'overview' | 'research' | 'angle';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
-  { key: 'research', label: 'Research' }
+  { key: 'research', label: 'Research' },
+  { key: 'angle', label: 'Angle' }
 ];
 
 const recommendationTone: Record<string, 'low' | 'medium' | 'high'> = {
@@ -24,8 +25,13 @@ export default function IdeaDetailPage() {
   const [idea, setIdea] = useState<ContentIdea | null>(null);
   const [research, setResearch] = useState<IdeaResearchReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [anglesLoading, setAnglesLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string>('');
   const [researchLoading, setResearchLoading] = useState(false);
   const [error, setError] = useState('');
+  const [angles, setAngles] = useState<IdeaAngle[]>([]);
+  const [overrideTarget, setOverrideTarget] = useState<IdeaAngle | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
 
   useEffect(() => {
     if (!query.id || Array.isArray(query.id)) return;
@@ -35,11 +41,13 @@ export default function IdeaDetailPage() {
     setError('');
     Promise.all([
       apiClient.getIdea(ideaId),
-      apiClient.getLatestIdeaResearch(ideaId).catch(() => null)
+      apiClient.getLatestIdeaResearch(ideaId).catch(() => null),
+      apiClient.listIdeaAngles(ideaId).catch(() => [])
     ])
-      .then(([ideaValue, researchValue]) => {
+      .then(([ideaValue, researchValue, angleValues]) => {
         setIdea(ideaValue);
         setResearch(researchValue);
+        setAngles(angleValues);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load idea.'))
       .finally(() => setLoading(false));
@@ -99,6 +107,96 @@ export default function IdeaDetailPage() {
       </div>
     </>;
   };
+  const refreshAngles = async () => {
+    if (!idea) return;
+    setAnglesLoading(true);
+    try { setAngles(await apiClient.listIdeaAngles(idea.id)); } finally { setAnglesLoading(false); }
+  };
+  const generateVariants = async () => {
+    if (!idea) return;
+    setActionLoading('generate');
+    setError('');
+    try {
+      const generated = await apiClient.generateIdeaAngles(idea.id, 3, idea.summary || idea.title);
+      setAngles((prev) => [...prev, ...generated]);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to generate variants.'); } finally { setActionLoading(''); }
+  };
+  const evaluateAngle = async (angleId: string) => {
+    if (!idea) return;
+    setActionLoading(`eval-${angleId}`);
+    try { const updated = await apiClient.evaluateIdeaAngle(idea.id, angleId); setAngles((prev) => prev.map((a) => a.id === updated.id ? updated : a)); } finally { setActionLoading(''); }
+  };
+  const approveAngle = async (angleId: string) => {
+    if (!idea) return;
+    setActionLoading(`approve-${angleId}`);
+    setError('');
+    try { const updated = await apiClient.approveIdeaAngle(idea.id, angleId); setAngles((prev) => prev.map((a) => a.id === updated.id ? updated : a)); } catch (e) { setError(e instanceof Error ? e.message : 'Approval failed.'); } finally { setActionLoading(''); }
+  };
+  const submitOverride = async () => {
+    if (!idea || !overrideTarget || !overrideReason.trim()) return;
+    setActionLoading(`override-${overrideTarget.id}`);
+    try {
+      const updated = await apiClient.overrideIdeaAngle(idea.id, overrideTarget.id, overrideReason.trim());
+      setAngles((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+      setOverrideTarget(null);
+      setOverrideReason('');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Override failed.'); } finally { setActionLoading(''); }
+  };
+
+  const renderAngles = () => {
+    if (!idea) return null;
+    if (anglesLoading) return <p>Loading angle variants...</p>;
+    return <div className="card">
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+        <h4 style={{ margin: 0 }}>Angle Variants</h4>
+        <div className="row">
+          <button className="btn" onClick={refreshAngles}>Refresh</button>
+          <button className="btn primary" onClick={generateVariants} disabled={actionLoading === 'generate'}>{actionLoading === 'generate' ? 'Generating...' : 'Generate Variants'}</button>
+        </div>
+      </div>
+      {!angles.length && <p className="muted">No angle variants yet. Generate variants to get started.</p>}
+      {!!angles.length && <div className="grid" style={{ gap: 12 }}>
+        {angles.map((entry) => {
+          const angle = entry.angle || {};
+          const evaln = entry.evaluation;
+          const gatePassed = Boolean(evaln?.gatePassed);
+          return <div key={entry.id} className="card">
+            <h4>{String(angle.headline || 'Untitled angle')}</h4>
+            <p><strong>Hook:</strong> {String(angle.hook || '—')}</p>
+            <p><strong>Summary:</strong> {String(angle.summary || '—')}</p>
+            <p><strong>Differentiator:</strong> {String(angle.differentiator || '—')}</p>
+            <p><strong>Human judgment required:</strong> {String(angle.human_judgment_required || '—')}</p>
+            {!evaln && <p className="muted">No scorecard yet. Evaluate to run deterministic gate.</p>}
+            {evaln && <>
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(5, minmax(120px, 1fr))' }}>
+                <div className="card"><div className="muted">Hook</div><h4>{evaln.hookClarity.toFixed(2)}</h4></div>
+                <div className="card"><div className="muted">Novelty</div><h4>{evaln.novelty.toFixed(2)}</h4></div>
+                <div className="card"><div className="muted">Audience fit</div><h4>{evaln.audienceFit.toFixed(2)}</h4></div>
+                <div className="card"><div className="muted">Risk</div><h4>{evaln.risk.toFixed(2)}</h4></div>
+                <div className="card"><div className="muted">Overall</div><h4>{evaln.overallScore.toFixed(2)}</h4></div>
+              </div>
+              {!gatePassed && <><p className="error">Generic-content warning: deterministic gate failed.</p><h5>Failed-gate reasons</h5><ul>{evaln.blockedReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></>}
+            </>}
+            {entry.override && <p className="muted">Overridden: {entry.override.reason}</p>}
+            <div className="row">
+              <button className="btn" onClick={() => evaluateAngle(entry.id)} disabled={actionLoading === `eval-${entry.id}`}>{actionLoading === `eval-${entry.id}` ? 'Evaluating...' : 'Evaluate'}</button>
+              <button className="btn primary" onClick={() => approveAngle(entry.id)} disabled={!gatePassed || actionLoading === `approve-${entry.id}`}>{actionLoading === `approve-${entry.id}` ? 'Approving...' : 'Approve'}</button>
+              {!gatePassed && <button className="btn" onClick={() => setOverrideTarget(entry)}>Override</button>}
+            </div>
+          </div>;
+        })}
+      </div>}
+      {overrideTarget && <div className="card" style={{ marginTop: 12 }}>
+        <h4>Override Approval Gate</h4>
+        <p className="muted">Provide required reason for manual override.</p>
+        <textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} rows={4} style={{ width: '100%' }} placeholder="Explain why this angle should be approved despite gate failure." />
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="btn" onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}>Cancel</button>
+          <button className="btn primary" disabled={!overrideReason.trim() || actionLoading === `override-${overrideTarget.id}`} onClick={submitOverride}>Submit Override</button>
+        </div>
+      </div>}
+    </div>;
+  };
 
   return <Layout title="Idea Detail">
     {loading && <p>Loading idea...</p>}
@@ -108,6 +206,7 @@ export default function IdeaDetailPage() {
       <div className="row" style={{ marginBottom: 12 }}>{TABS.map((item) => <button className={`btn ${tab === item.key ? 'primary' : ''}`} key={item.key} onClick={() => setTab(item.key)}>{item.label}</button>)}</div>
       {tab === 'overview' && <><h3>{idea.title}</h3><p className="muted">{idea.contentPillar} • {idea.status}</p><p>{idea.summary || 'No summary provided.'}</p></>}
       {tab === 'research' && renderResearch()}
+      {tab === 'angle' && renderAngles()}
     </div>}
   </Layout>;
 }
