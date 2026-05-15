@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.observability import correlation_id_var
 from app.repositories.video_project_repository import DBVideoProjectRepository, InMemoryVideoProjectRepository
+from app.services.ai_provider import LLMProvider, MockLLMProvider, OllamaProvider, OpenAICompatibleProvider
 from app.services.usage_service import UsageService
 from app.services.video_project_service import VideoProjectService
 
@@ -125,3 +126,27 @@ def get_video_project_service(session: AsyncSession | None = Depends(get_db_sess
 def get_usage_service(session: AsyncSession | None = Depends(get_db_session)) -> UsageService:
     repo = DBVideoProjectRepository(session) if session is not None else repo_singleton
     return UsageService(repo)
+
+
+def get_llm_provider() -> LLMProvider:
+    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
+
+    if provider == "mock":
+        return MockLLMProvider()
+
+    if provider == "ollama":
+        model = os.getenv("OLLAMA_MODEL", "llama3.1")
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        return OllamaProvider(model=model, base_url=base_url)
+
+    base_url = os.getenv("OPENAI_BASE_URL", "").strip()
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    model = os.getenv("OPENAI_MODEL", "").strip()
+    if base_url and api_key and model:
+        return OpenAICompatibleProvider(base_url=base_url, api_key=api_key, model=model)
+
+    env = os.getenv("APP_ENV", os.getenv("ENV", "")).strip().lower()
+    if env in {"local", "development", "dev", "test"}:
+        return MockLLMProvider()
+
+    return MockLLMProvider()
