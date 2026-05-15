@@ -3,17 +3,22 @@ from uuid import uuid4
 
 from app.services.product_agents import (
     AgentExecutionError,
-    ComplianceInput,
-    MockLLMProvider,
-    NoopCostTracker,
-    PerformanceInput,
+    LLMParseError,
     LLMRequestContext,
+    LLMSchemaValidationError,
+    ComplianceInput,
     ProductWorkflow,
     ResearchInput,
     RetryPolicy,
     SEOInput,
     ScriptInput,
+    TrackedLLMClient,
+    ResearchAgent,
+    NoopCostTracker,
+    MockLLMProvider,
+    PerformanceInput,
 )
+from app.services.ai_provider import LLMProvider, LLMRequest, LLMResponse, LLMUsage
 
 
 def _inputs():
@@ -113,3 +118,39 @@ def test_retry_policy_raises_after_exhaustion():
             compliance_input=compliance,
             performance_input=performance,
         )
+
+
+class _MalformedThenValidProvider(LLMProvider):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, request: LLMRequest) -> LLMResponse:
+        self.calls += 1
+        if self.calls == 1:
+            return LLMResponse(raw_text='{"video_ideas": [}', parsed_json=None, usage=LLMUsage(output_tokens=10))
+        return LLMResponse(
+            raw_text='{"video_ideas":["a"],"angles":["b"],"search_intent":"c","target_audience":"d","risk_notes":["e"]}',
+            parsed_json=None,
+            usage=LLMUsage(output_tokens=10),
+            provider_metadata={"provider": "test-provider"},
+        )
+
+
+class _InvalidSchemaProvider(LLMProvider):
+    def generate(self, request: LLMRequest) -> LLMResponse:
+        return LLMResponse(raw_text='{"video_ideas":"not-a-list"}', parsed_json=None, usage=LLMUsage(output_tokens=10))
+
+
+def test_structured_generation_recovers_once_from_malformed_json():
+    client = TrackedLLMClient(_MalformedThenValidProvider())
+    agent = ResearchAgent(client, context=_context())
+    output = agent.run(_inputs()[0])
+    assert output.video_ideas == ["a"]
+
+
+def test_structured_generation_raises_schema_validation_error():
+    client = TrackedLLMClient(_InvalidSchemaProvider())
+    agent = ResearchAgent(client, context=_context(), retry=RetryPolicy(max_attempts=1))
+    with pytest.raises(AgentExecutionError) as exc:
+        agent.run(_inputs()[0])
+    assert isinstance(exc.value.__cause__, LLMSchemaValidationError | LLMParseError)

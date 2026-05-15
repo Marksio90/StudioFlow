@@ -4,11 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from hashlib import sha256
+import json
+import re
 from time import perf_counter
-from typing import Protocol
+from typing import Any, Protocol, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest, MockLLMProvider
 from app.services.model_router import ModelRouter
@@ -16,6 +18,33 @@ from app.services.model_router import ModelRouter
 
 class AgentExecutionError(RuntimeError):
     """Raised when an agent cannot produce a valid structured output."""
+
+@dataclass
+class LLMErrorContext:
+    provider: str
+    model: str
+    task_type: str
+    trace_id: str
+
+
+class LLMProviderError(AgentExecutionError):
+    def __init__(self, message: str, context: LLMErrorContext) -> None:
+        super().__init__(f"{message} provider={context.provider} model={context.model} task={context.task_type} trace={context.trace_id}")
+        self.context = context
+
+
+class LLMParseError(AgentExecutionError):
+    def __init__(self, message: str, context: LLMErrorContext, raw_output: str) -> None:
+        super().__init__(f"{message} provider={context.provider} model={context.model} task={context.task_type} trace={context.trace_id}")
+        self.context = context
+        self.raw_output = raw_output
+
+
+class LLMSchemaValidationError(AgentExecutionError):
+    def __init__(self, message: str, context: LLMErrorContext, validation_error: ValidationError) -> None:
+        super().__init__(f"{message} provider={context.provider} model={context.model} task={context.task_type} trace={context.trace_id}")
+        self.context = context
+        self.validation_error = validation_error
 
 
 class RetryPolicy(BaseModel):
@@ -66,19 +95,53 @@ class TrackedLLMClient:
         self.model_router = model_router or ModelRouter()
         self.cost_tracker = cost_tracker or NoopCostTracker()
 
-    def generate(self, *, task_type: str, payload: dict, context: LLMRequestContext) -> dict:
+    def generate(self, *, task_type: str, payload: dict, context: LLMRequestContext) -> dict[str, Any]:
+        return self._generate_dict(task_type=task_type, payload=payload, context=context)
+
+    def _generate_dict(self, *, task_type: str, payload: dict, context: LLMRequestContext, repair_input: str | None = None) -> dict[str, Any]:
         started = perf_counter()
+        llm_config = self.model_router.resolve(task_type=task_type)
+        if repair_input is None:
+            user_payload = str(payload)
+            messages = [LLMMessage(role="user", content=user_payload)]
+            system_prompt = f"Task: {task_type}. Return valid JSON only."
+        else:
+            user_payload = repair_input
+            messages = [LLMMessage(role="user", content=repair_input)]
+            system_prompt = "Repair the following content into valid JSON only. Return JSON with no markdown."
         request = LLMRequest(
             task_type=task_type,
-            system_prompt=f"Task: {task_type}",
-            user_content=str(payload),
-            messages=[LLMMessage(role="user", content=str(payload))],
-            provider_metadata={"task_type": task_type},
+            system_prompt=system_prompt,
+            user_content=user_payload,
+            messages=messages,
+            provider_metadata={"task_type": task_type, "response_format": "json"},
         )
-        response = self.provider.generate(request)
-        raw = response.parsed_json or {"raw_text": response.raw_text}
+        trace_id = sha256(f"{task_type}:{payload}:{context.workflow_run_id}".encode()).hexdigest()[:16]
+        try:
+            response = self.provider.generate(request)
+        except Exception as exc:  # noqa: BLE001
+            raise LLMProviderError(
+                "LLM provider request failed",
+                context=LLMErrorContext(provider=llm_config.provider, model=llm_config.model, task_type=task_type, trace_id=trace_id),
+            ) from exc
+        raw = response.parsed_json
+        if raw is None:
+            raw = self._parse_json_response(response.raw_text)
+        if raw is None and repair_input is None:
+            repaired = self._generate_dict(
+                task_type=task_type,
+                payload=payload,
+                context=context,
+                repair_input=f"Return strict JSON only for this task payload.\n{payload}\nPrevious invalid output:\n{response.raw_text}",
+            )
+            raw = repaired
+        if raw is None:
+            raise LLMParseError(
+                "Failed to parse model output as JSON",
+                context=LLMErrorContext(provider=llm_config.provider, model=llm_config.model, task_type=task_type, trace_id=trace_id),
+                raw_output=response.raw_text,
+            )
         latency_ms = int((perf_counter() - started) * 1000)
-        llm_config = self.model_router.resolve(task_type=task_type)
         input_tokens = max(1, len(str(payload)) // 4)
         output_tokens = response.usage.output_tokens or max(1, len(str(raw)) // 4)
         est_cost = Decimal(input_tokens * 0.0000002 + output_tokens * 0.0000008).quantize(Decimal("0.00000001"))
@@ -101,6 +164,20 @@ class TrackedLLMClient:
         ))
         return raw
 
+    def _parse_json_response(self, text: str) -> dict[str, Any] | None:
+        try:
+            parsed = json.loads(text)
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if not match:
+                return None
+            try:
+                parsed = json.loads(match.group(0))
+                return parsed if isinstance(parsed, dict) else None
+            except json.JSONDecodeError:
+                return None
+
 class BaseAgent:
     name = "base"
 
@@ -109,11 +186,25 @@ class BaseAgent:
         self.context = context
         self.retry = retry or RetryPolicy()
 
-    def _generate(self, payload: dict) -> dict:
+    TModel = TypeVar("TModel", bound=BaseModel)
+
+    def _generate_typed(self, payload: dict, output_model: type[TModel]) -> TModel:
         last_error: Exception | None = None
         for _ in range(self.retry.max_attempts):
             try:
-                return self.llm_client.generate(task_type=self.name, payload=payload, context=self.context)
+                raw = self.llm_client.generate(task_type=self.name, payload=payload, context=self.context)
+                return output_model.model_validate(raw)
+            except ValidationError as exc:
+                last_error = LLMSchemaValidationError(
+                    "LLM output schema validation failed",
+                    context=LLMErrorContext(
+                        provider=self.llm_client.model_router.resolve(task_type=self.name).provider,
+                        model=self.llm_client.model_router.resolve(task_type=self.name).model,
+                        task_type=self.name,
+                        trace_id=sha256(f"{self.name}:{payload}:{self.context.workflow_run_id}".encode()).hexdigest()[:16],
+                    ),
+                    validation_error=exc,
+                )
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
         raise AgentExecutionError(f"{self.name} failed after {self.retry.max_attempts} attempts") from last_error
@@ -140,14 +231,7 @@ class ResearchAgent(BaseAgent):
     name = "ResearchAgent"
 
     def run(self, data: ResearchInput) -> ResearchOutput:
-        raw = self._generate(data.model_dump())
-        return ResearchOutput(
-            video_ideas=[f"{data.topic} - format 1", f"{data.topic} - format 2"],
-            angles=["problem/solution", "case study"],
-            search_intent=f"Użytkownik chce zrozumieć: {data.topic}",
-            target_audience=data.target_audience,
-            risk_notes=[f"mock_call={raw.get('call', 'n/a')}", "zweryfikować źródła danych"],
-        )
+        return self._generate_typed(data.model_dump(), ResearchOutput)
 
 
 class ScriptInput(BaseModel):
@@ -170,14 +254,7 @@ class ScriptAgent(BaseAgent):
     name = "ScriptAgent"
 
     def run(self, data: ScriptInput) -> ScriptOutput:
-        self._generate(data.model_dump())
-        return ScriptOutput(
-            hook=f"Czy wiesz, dlaczego {data.selected_idea}?",
-            outline=["Intro", "Problem", "Rozwiązanie", "Podsumowanie"],
-            full_script=f"[{data.tone}] Skrypt dla: {data.selected_idea}",
-            cta="Napisz w komentarzu, co testujesz jako następne.",
-            chapters=["00:00 Intro", "00:40 Problem", "02:00 Rozwiązanie", "03:30 CTA"],
-        )
+        return self._generate_typed(data.model_dump(), ScriptOutput)
 
 
 class SEOInput(BaseModel):
@@ -199,15 +276,7 @@ class SEOAgent(BaseAgent):
     name = "SEOAgent"
 
     def run(self, data: SEOInput) -> SEOOutput:
-        self._generate(data.model_dump())
-        return SEOOutput(
-            title_variants=[f"{data.topic}: kompletny przewodnik", f"{data.topic} w 5 krokach"],
-            description=f"Materiał o {data.topic} w języku {data.language}.",
-            tags=[data.topic, "youtube seo", "content strategy"],
-            thumbnail_brief="Kontrastowe tło, 3 słowa, emocjonalna twarz.",
-            chapters=["00:00 Start", "01:00 Wartość", "03:00 Wnioski"],
-            pinned_comment="Jaki temat rozwinąć w kolejnym odcinku?",
-        )
+        return self._generate_typed(data.model_dump(), SEOOutput)
 
 
 class ComplianceInput(BaseModel):
@@ -228,15 +297,7 @@ class ComplianceAgent(BaseAgent):
     name = "ComplianceAgent"
 
     def run(self, data: ComplianceInput) -> ComplianceOutput:
-        self._generate(data.model_dump())
-        return ComplianceOutput(
-            risk_level="low",
-            score=92,
-            requires_ai_disclosure=True,
-            reasons=["Skrypt zawiera treści generowane automatycznie."],
-            recommendations=["Dodaj disclosure AI w opisie."],
-            blocking_issues=[],
-        )
+        return self._generate_typed(data.model_dump(), ComplianceOutput)
 
 
 class PerformanceInput(BaseModel):
@@ -257,13 +318,7 @@ class PerformanceAgent(BaseAgent):
     name = "PerformanceAgent"
 
     def run(self, data: PerformanceInput) -> PerformanceOutput:
-        self._generate(data.model_dump())
-        return PerformanceOutput(
-            what_worked=["Mocny hook zwiększył CTR."],
-            what_failed=["Za długi segment środkowy obniżył retencję."],
-            next_recommendations=["Skróć część środkową o 20%.", "Dodaj pattern interrupt po 45s."],
-            title_thumbnail_suggestions=["Wersja tytułu z liczbą", "Miniatura z kontrastowym hasłem"],
-        )
+        return self._generate_typed(data.model_dump(), PerformanceOutput)
 
 
 class ProductWorkflowResult(BaseModel):
