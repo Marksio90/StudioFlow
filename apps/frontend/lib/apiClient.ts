@@ -1,4 +1,4 @@
-import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, NicheReport, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
+import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, IdeaResearchRecommendation, IdeaResearchReport, NicheReport, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
 import type { components, operations } from '../../../packages/shared/src/backend-api';
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -71,7 +71,9 @@ type ApiAdapter = {
     ideas: '/api/v1/content-ideas';
     ideaById: (id: string) => `/api/v1/content-ideas/${string}`;
     ideaStatus: (id: string) => `/api/v1/content-ideas/${string}/status`;
-  
+    ideaResearchAnalyze: (id: string) => `/api/v1/content-ideas/${string}/research/analyze`;
+    ideaResearchLatest: (id: string) => `/api/v1/content-ideas/${string}/research/latest`;
+    ideaResearchReports: (id: string) => `/api/v1/content-ideas/${string}/research/reports`;
   };
   toListProjectsQuery: (filters?: { status?: ProjectStatus; channel?: string }) => ListProjectsQuery;
   toCreateProjectBody: (input: CreateProjectInput) => CreateProjectBody;
@@ -89,7 +91,7 @@ export const backendApiAdapter: ApiAdapter = {
   paths: {
     projects: '/api/v1/video-projects', projectById: (id) => `/api/v1/video-projects/${id}`, projectAnalytics: (id) => `/api/v1/video-projects/${id}/analytics`, projectApprove: (id) => `/api/v1/video-projects/${id}/approve`, projectReject: (id) => `/api/v1/video-projects/${id}/reject`,
     channels: '/api/v1/channels', channelById: (id) => `/api/v1/channels/${id}`, channelMemory: (id) => `/api/v1/channels/${id}/memory`, nicheAnalyze: (id) => `/api/v1/channels/${id}/niche/analyze`, nicheReports: (id) => `/api/v1/channels/${id}/niche/reports`, nicheReportById: (id, reportId) => `/api/v1/channels/${id}/niche/reports/${reportId}`,
-    ideas: '/api/v1/content-ideas', ideaById: (id) => `/api/v1/content-ideas/${id}`, ideaStatus: (id) => `/api/v1/content-ideas/${id}/status`
+    ideas: '/api/v1/content-ideas', ideaById: (id) => `/api/v1/content-ideas/${id}`, ideaStatus: (id) => `/api/v1/content-ideas/${id}/status`, ideaResearchAnalyze: (id) => `/api/v1/content-ideas/${id}/research/analyze`, ideaResearchLatest: (id) => `/api/v1/content-ideas/${id}/research/latest`, ideaResearchReports: (id) => `/api/v1/content-ideas/${id}/research/reports`
   },
   toListProjectsQuery: (filters) => ({ status: filters?.status, channel_id: filters?.channel }),
   toCreateProjectBody: (input) => ({ title: input.title, organization_id: DEFAULT_ORGANIZATION_ID, workspace_id: DEFAULT_WORKSPACE_ID, channel_id: DEFAULT_CHANNEL_ID }),
@@ -162,6 +164,22 @@ const mapIdeaDto = (dto: BackendContentIdea): ContentIdea => ({
   updatedAt: dto.updated_at
 });
 const mapProjectDto = (dto: BackendVideoProject): VideoProject => ({ id: dto.id, title: dto.title, topic: '', description: '', channel: dto.channel_id, language: '', targetAudience: '', status: dto.status, aiCostUsd: dto.ai_cost_usd ?? 0, youtubeQuotaUsed: dto.youtube_quota_used ?? 0, createdAt: dto.created_at, updatedAt: dto.updated_at, overview: dto.overview ?? '', research: dto.research ?? '', script: dto.script ?? '', seo: dto.seo ?? '', approvalNote: dto.approval_note, compliance: { score: dto.compliance?.score ?? 0, riskLevel: dto.compliance?.risk_level ?? 'low', blockingIssues: dto.compliance?.blocking_issues ?? [], recommendations: dto.compliance?.recommendations ?? [] }, workflowEvents: (dto.workflow_events ?? []).map((event) => ({ id: event.id, timestamp: new Date().toISOString(), actor: event.payload?.actor ? String(event.payload.actor) : 'system', event: event.event_type })), analytics: { estimatedCtr: dto.analytics?.estimated_ctr ?? 0, projectedViews: dto.analytics?.projected_views ?? 0 } });
+
+const mapIdeaResearchReport = (dto: any): IdeaResearchReport => ({
+  id: dto.id,
+  ideaId: dto.idea_id,
+  summary: dto.summary ?? '',
+  recommendation: (dto.recommendation ?? 'needs_more_research') as IdeaResearchRecommendation,
+  scores: {
+    demandScore: dto.scores?.demand_score ?? 0,
+    competitionScore: dto.scores?.competition_score ?? 0,
+    evidenceScore: dto.scores?.evidence_score ?? 0
+  },
+  missingEvidence: dto.missing_evidence ?? [],
+  genericRisks: dto.generic_risks ?? [],
+  recommendedNextAction: dto.recommended_next_action ?? '',
+  createdAt: dto.created_at
+});
 const mapAnalyticsDto = (dto: BackendAnalyticsSnapshot): AnalyticsSnapshot => ({ id: dto.id, videoProjectId: dto.video_project_id, channelId: dto.channel_id, youtubeVideoId: dto.youtube_video_id, views: dto.views, watchTimeMinutes: dto.watch_time_minutes, averageViewDuration: dto.average_view_duration, ctr: dto.ctr, likes: dto.likes, comments: dto.comments, subscribersGained: dto.subscribers_gained, estimatedRevenue: dto.estimated_revenue, snapshotAt: dto.snapshot_at });
 
 async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> { /* unchanged */
@@ -214,6 +232,17 @@ export const apiClient = { buildApiUrl,
   },
   async updateIdeaStatus(id: string, status: ContentIdeaStatus, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
     return mapIdeaDto(await apiRequest<BackendContentIdea>(backendApiAdapter.paths.ideaStatus(id), { method: 'PATCH', body: { status }, onLoadingChange: options?.onLoadingChange }));
+  },
+
+  async analyzeIdeaResearch(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaResearchReport(await apiRequest<any>(backendApiAdapter.paths.ideaResearchAnalyze(id), { method: 'POST', onLoadingChange: options?.onLoadingChange }));
+  },
+  async getLatestIdeaResearch(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    return mapIdeaResearchReport(await apiRequest<any>(backendApiAdapter.paths.ideaResearchLatest(id), { onLoadingChange: options?.onLoadingChange }));
+  },
+  async listIdeaResearchReports(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) {
+    const response = await apiRequest<{ items: any[] }>(backendApiAdapter.paths.ideaResearchReports(id), { onLoadingChange: options?.onLoadingChange });
+    return response.items.map(mapIdeaResearchReport);
   },
 };
 
