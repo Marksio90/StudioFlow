@@ -371,3 +371,10 @@ class NicheIntelligenceReport(Base, UUIDMixin, TimestampMixin):
     compliance_notes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     next_actions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     scores: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class TopicResearchReport(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "topic_research_reports"
+    content_idea_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("video_ideas.id"), index=True, nullable=False)
+    channel_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("channels.id"), index=True, nullable=False)
+    report: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
