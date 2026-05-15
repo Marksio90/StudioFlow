@@ -7,7 +7,14 @@ from app.api.channels import _get_channel
 from app.api.deps import Identity, get_correlation_id, get_db_session, repo_singleton, require_action
 from app.api.errors import structured_error
 from app.db.models import ContentIdea
-from app.schemas.video_project import ContentIdeaCreate, ContentIdeaOut
+from app.schemas.video_project import (
+    ContentIdeaCreatePayload,
+    ContentIdeaListFilters,
+    ContentIdeaOut,
+    ContentIdeaResponse,
+    ContentIdeaStatusChangePayload,
+    ContentIdeaUpdatePayload,
+)
 
 router = APIRouter(tags=["content-ideas"])
 
@@ -57,6 +64,7 @@ async def list_content_ideas(
     session=Depends(get_db_session),
     identity: Identity = Depends(require_action("read", "channels")),
 ):
+    _ = ContentIdeaListFilters(status=status, content_pillar=content_pillar, q=q, include_archived=include_archived)
     await _get_channel(channel_id, correlation_id, identity, session)
     if status is not None and status not in ALLOWED_IDEA_STATUSES:
         raise structured_error(422, "CONTENT_IDEA_INVALID_STATUS", "Invalid status value", correlation_id)
@@ -89,10 +97,10 @@ async def list_content_ideas(
     return list(result.scalars().all())
 
 
-@router.post("/api/v1/channels/{channel_id}/ideas", response_model=ContentIdeaOut, status_code=201)
+@router.post("/api/v1/channels/{channel_id}/ideas", response_model=ContentIdeaResponse, status_code=201)
 async def create_content_idea(
     channel_id: UUID,
-    payload: ContentIdeaCreate,
+    payload: ContentIdeaCreatePayload,
     correlation_id: str = Depends(get_correlation_id),
     session=Depends(get_db_session),
     identity: Identity = Depends(require_action("write", "channels")),
@@ -104,6 +112,8 @@ async def create_content_idea(
         raise structured_error(422, "CONTENT_IDEA_INVALID_STATUS", "Invalid status value", correlation_id)
 
     data = payload.model_dump()
+    scores = data.pop("scores") or {}
+    data.update(scores)
     data["channel_id"] = channel_id
     data["idea_text"] = data.get("idea_text") or data.get("description", "")
 
@@ -133,28 +143,32 @@ async def get_content_idea(
     return await _require_idea(idea_id, correlation_id, identity, session)
 
 
-@router.patch("/api/v1/ideas/{idea_id}", response_model=ContentIdeaOut)
+@router.patch("/api/v1/ideas/{idea_id}", response_model=ContentIdeaResponse)
 async def patch_content_idea(
     idea_id: UUID,
-    payload: dict,
+    payload: ContentIdeaUpdatePayload,
     correlation_id: str = Depends(get_correlation_id),
     session=Depends(get_db_session),
     identity: Identity = Depends(require_action("write", "channels")),
 ):
     row = await _require_idea(idea_id, correlation_id, identity, session)
-    unknown = [k for k in payload.keys() if k not in MUTABLE_FIELDS]
+    payload_dict = payload.model_dump(exclude_unset=True)
+    if "scores" in payload_dict:
+        scores = payload_dict.pop("scores") or {}
+        payload_dict.update(scores)
+    unknown = [k for k in payload_dict.keys() if k not in MUTABLE_FIELDS]
     if unknown:
         raise structured_error(422, "CONTENT_IDEA_INVALID_FIELDS", f"Unsupported mutable fields: {', '.join(sorted(unknown))}", correlation_id)
-    if "status" in payload and payload["status"] not in ALLOWED_IDEA_STATUSES:
+    if "status" in payload_dict and payload_dict["status"] not in ALLOWED_IDEA_STATUSES:
         raise structured_error(422, "CONTENT_IDEA_INVALID_STATUS", "Invalid status value", correlation_id)
 
     if session is None:
-        for k, v in payload.items():
+        for k, v in payload_dict.items():
             if v is not None:
                 row[k] = v
         return row
 
-    for k, v in payload.items():
+    for k, v in payload_dict.items():
         if v is not None:
             setattr(row, k, v)
     await session.commit()
@@ -178,16 +192,16 @@ async def delete_content_idea(
     return Response(status_code=204)
 
 
-@router.post("/api/v1/ideas/{idea_id}/status", response_model=ContentIdeaOut)
+@router.post("/api/v1/ideas/{idea_id}/status", response_model=ContentIdeaResponse)
 async def set_content_idea_status(
     idea_id: UUID,
-    payload: dict,
+    payload: ContentIdeaStatusChangePayload,
     correlation_id: str = Depends(get_correlation_id),
     session=Depends(get_db_session),
     identity: Identity = Depends(require_action("write", "channels")),
 ):
-    status = payload.get("status")
-    if not isinstance(status, str) or status not in ALLOWED_IDEA_STATUSES:
+    status = payload.status
+    if status not in ALLOWED_IDEA_STATUSES:
         raise structured_error(422, "CONTENT_IDEA_INVALID_STATUS", "Invalid status value", correlation_id)
 
     row = await _require_idea(idea_id, correlation_id, identity, session)
