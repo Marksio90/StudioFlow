@@ -97,6 +97,51 @@ describe('apiClient contract', () => {
     expect(patched.youtubeChannelId).toBe('yt-2');
     expect(channelMemory.bannedPhrases).toEqual(['No hype']);
   });
+
+
+  it('covers ideas board smoke interactions via ideas API calls (list/create/edit/filter/status)', async () => {
+    const idea = {
+      id: 'i1', organization_id: 'o1', workspace_id: 'w1', channel_id: 'c1', title: 'Idea 1', summary: 'Summary 1', content_pillar: 'education', status: 'ideas', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z'
+    };
+
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/api/v1/content-ideas?')) {
+        expect(url).toContain('status=ideas');
+        expect(url).toContain('content_pillar=education');
+        expect(url).toContain('q=hook');
+        return new Response(JSON.stringify({ items: [idea] }), { status: 200 });
+      }
+      if (url.endsWith('/api/v1/content-ideas') && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        expect(body).toMatchObject({ title: 'Created', content_pillar: 'education', organization_id: expect.any(String), workspace_id: expect.any(String), channel_id: expect.any(String) });
+        return new Response(JSON.stringify({ ...idea, title: 'Created' }), { status: 200 });
+      }
+      if (url.endsWith('/api/v1/content-ideas/i1') && init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body));
+        expect(body).toEqual({ title: 'Edited', content_pillar: 'news', summary: 'Updated summary' });
+        return new Response(JSON.stringify({ ...idea, title: 'Edited', content_pillar: 'news', summary: 'Updated summary' }), { status: 200 });
+      }
+      if (url.endsWith('/api/v1/content-ideas/i1/status') && init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body));
+        expect(body).toEqual({ status: 'ready' });
+        return new Response(JSON.stringify({ ...idea, status: 'ready' }), { status: 200 });
+      }
+      throw new Error(`Unhandled URL: ${url}`);
+    });
+
+    const listed = await apiClient.listIdeas({ status: 'ideas', contentPillar: 'education', query: 'hook' });
+    const created = await apiClient.createIdea({ title: 'Created', contentPillar: 'education', summary: 'New summary' });
+    const edited = await apiClient.updateIdea('i1', { title: 'Edited', contentPillar: 'news', summary: 'Updated summary' });
+    const moved = await apiClient.updateIdeaStatus('i1', 'ready');
+
+    expect(listed[0].title).toBe('Idea 1');
+    expect(created.title).toBe('Created');
+    expect(edited.contentPillar).toBe('news');
+    expect(moved.status).toBe('ready');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
 it('fails fast on backend 500 errors', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'Internal Server Error' }), { status: 500, statusText: 'Internal Server Error' }));
 
