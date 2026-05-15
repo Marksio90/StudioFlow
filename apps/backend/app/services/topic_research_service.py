@@ -2,22 +2,18 @@ from __future__ import annotations
 
 import json
 import hashlib
-from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import ValidationError
 
 from app.db.models import LLMCall
+from app.schemas.topic_research import TopicResearchReportOut as TopicResearchOutput
 from app.schemas.video_project import ContentIdeaOut
 from app.services.ai_provider import LLMMessage, LLMProvider, LLMRequest
 from app.services.model_router import ModelRouter
 from app.services.prompt_registry import PromptRegistry, serialize_untrusted_block
 
 
-class TopicRecommendation(str, Enum):
-    pursue = "pursue"
-    refine = "refine"
-    reject = "reject"
 
 
 class TopicResearchServiceError(Exception):
@@ -28,30 +24,8 @@ class TopicResearchServiceError(Exception):
         self.details = details or {}
 
 
-class TopicResearchScores(BaseModel):
-    demand_score: int = Field(ge=0, le=100)
-    competition_score: int = Field(ge=0, le=100)
-    novelty_score: int = Field(ge=0, le=100)
-    channel_fit_score: int = Field(ge=0, le=100)
-    execution_risk_score: int = Field(ge=0, le=100)
-    overall_score: int = Field(ge=0, le=100)
-
-    @field_validator("*")
-    @classmethod
-    def _to_clamped_int(cls, value: int | float) -> int:
-        if not isinstance(value, (int, float)):
-            raise TypeError("score must be numeric")
-        return max(0, min(100, int(round(value))))
-
-
-class TopicResearchOutput(BaseModel):
-    recommendation: TopicRecommendation
-    rationale: str = Field(min_length=1)
-    key_points: list[str] = Field(default_factory=list)
-    scores: TopicResearchScores
-
-
 class TopicResearchService:
+
     TASK_TYPE = "research"
     PROMPT_NAME = "topic_research_analyze"
     PROMPT_VERSION = "v1"
