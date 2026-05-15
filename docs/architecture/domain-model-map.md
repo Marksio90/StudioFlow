@@ -1,21 +1,38 @@
 # Domain Model Map
 
-## VideoIdea → ContentIdea migration
+| Canonical concept name | Existing implementation | Decision | Reason | Related files | Migration impact | API impact | Frontend/shared contract impact |
+|---|---|---|---|---|---|---|---|
+| Organization | `Organization` model with workspace membership ownership roots. | reuse | Already canonical tenant boundary for multi-tenant scoping and billing rollups. | `apps/backend/app/db/models.py` | None expected. | None expected. | None expected. |
+| Workspace | `Workspace` model tied to `Organization`; primary collaboration boundary. | reuse | Core collaborative container already in place and used by project entities. | `apps/backend/app/db/models.py` | None expected. | None expected. | None expected. |
+| Channel | `Channel` model plus usage registration endpoints and quota linkage. | extend | Need YouTube OAuth linkage/token lifecycle and sync metadata enrichment. | `apps/backend/app/db/models.py`, `apps/backend/app/api/usage.py` | Add nullable OAuth/provider linkage columns; backfill optional metadata. | Add channel auth/link endpoints (new surface area). | Add typed channel-auth/linking DTOs in OpenAPI/shared package. |
+| ContentIdea | Existing `VideoIdea` model. | rename later | Domain language should be channel-agnostic (“content” vs “video”), but physical table stability minimizes immediate risk. | `apps/backend/app/db/models.py` | Alias period first; deferred table/model symbol rename migration. | Introduce/prefer `ContentIdea*` API names while supporting `VideoIdea*` compatibility aliases. | Frontend and shared types should prefer `ContentIdea` naming with compatibility mappings. |
+| Brief | No first-class model yet; currently implicit in project metadata and agent prompts. | create new | Missing explicit planning artifact blocks structured handoff from idea to script. | `apps/backend/app/services/product_agents.py` | New table + relations to project/idea; optional backfill from metadata blobs. | New CRUD/read endpoints required. | New DTOs and FE forms; mapper updates for project detail views. |
+| ScriptDraft | `ScriptDraft` model and script-generation flows in product agents. | extend | Existing draft storage works, but requires tighter version lineage and approval references. | `apps/backend/app/db/models.py`, `apps/backend/app/services/product_agents.py` | Add revision/version and approval linkage fields. | Add version-aware script endpoints and response fields. | Expand shared types for revisions; FE diff/history UI contract changes. |
+| ComplianceReport | `ComplianceReport` model and compliance endpoints/service. | reuse | Concept and implementation align; already explicit and policy-oriented. | `apps/backend/app/db/models.py`, `apps/backend/app/api/video_projects.py` | None expected. | None expected (except optional field additions). | None expected (except optional field additions). |
+| PublishingPackage | Existing `PublishingPlan` model and schedule/publish endpoints. | rename later | “Package” better reflects bundled publish payload (title/description/timing/assets), but `PublishingPlan` is currently pervasive. | `apps/backend/app/db/models.py`, `apps/backend/app/api/video_projects.py` | Compatibility alias + deferred data/model rename migration. | Add `PublishingPackage` naming in API with temporary acceptance/return of `PublishingPlan` aliases. | Shared contracts should introduce preferred `PublishingPackage` names and deprecate old names gradually. |
+| AnalyticsReport | Existing `AnalyticsSnapshot` model with analytics sync/service. | rename later | “Report” better represents user-facing analytic artifact; “snapshot” can remain a storage detail. | `apps/backend/app/db/models.py`, `apps/backend/app/services/analytics_service.py` | Mostly semantic rename at model/service/API layers; storage schema can stay stable initially. | Prefer `AnalyticsReport*` response naming; keep `AnalyticsSnapshot*` compatibility during migration. | Frontend chart/report modules and generated types should migrate to `AnalyticsReport` names. |
+| Approval (aggregate model) | Existing `ApprovalDecision` record and approval endpoints (`approve`, `reject`, `needs-changes`). | extend | Single-decision rows do not fully model approval lifecycle/audit trail as an aggregate with state + events. | `apps/backend/app/db/models.py`, `apps/backend/app/api/video_projects.py`, `apps/backend/app/services/workflow_engine.py` | Add approval aggregate root + child decisions/events or enrich current table set; data backfill for current rows. | Normalize approval endpoints around aggregate lifecycle resources. | Update shared contracts from decision-centric payloads to aggregate-centric payloads; FE state machine updates. |
+| Asset | `Asset` and `AssetLicense` models for media artifacts and licensing metadata. | extend | Core exists, but upload/transcode/validation lifecycle is incomplete. | `apps/backend/app/db/models.py` | Add processing-state/provenance fields; possible new tables for ingest events. | New media pipeline endpoints likely required. | New shared media contracts and upload workflow types. |
+| WorkflowRun | `WorkflowRun`, `WorkflowStep`, `WorkflowEvent` plus engine and worker task orchestration. | reuse | Model shape aligns with orchestration needs; focus is ownership boundaries, not concept rename. | `apps/backend/app/db/models.py`, `apps/backend/app/services/workflow_engine.py`, `apps/worker/app/tasks/video_workflow.py` | None required for naming; possible additive event schema evolution. | Minor additive fields/endpoints for observability only. | Minimal additive contract changes for richer workflow telemetry. |
 
-### Phase 1 (implemented on May 15, 2026)
-- Introduce `ContentIdea` as the canonical domain model name.
-- Keep physical database table name stable as `video_ideas`.
-- Keep compatibility aliases/wrappers for `VideoIdea` naming in ORM, schema, repository, and service layers.
+## Explicit compatibility notes
 
-### Phase 2 (optional, future)
-If table-level naming alignment is needed, perform a separate migration:
-1. Rename table `video_ideas` to `content_ideas` **or** create `content_ideas` and migrate rows.
-2. Add compatibility view named `video_ideas` selecting from `content_ideas` for backward compatibility.
-3. Keep write-path compatibility by using DB triggers/rules or a dual-write strategy during transition.
-4. Remove compatibility view once all callers fully migrate.
+### `VideoIdea -> ContentIdea`
+- **Compatibility strategy:** keep DB storage identifier stable (`video_ideas`) while introducing `ContentIdea` as the canonical domain/API naming.
+- **Read/write compatibility:** support both `VideoIdea*` and `ContentIdea*` symbols during transition in repository/service/schema layers.
+- **Deprecation path:** mark `VideoIdea*` names deprecated immediately, freeze new usage next release, remove aliases after downstream migration completion.
 
-### Deprecation timeline
-- **Now (May 15, 2026):** `ContentIdea*` names are preferred.
-- **+1 release:** emit deprecation warnings in API/docs/changelogs for `VideoIdea*` names.
-- **+2 releases:** freeze new usage of `VideoIdea*` names in internal code.
-- **+3 releases:** remove `VideoIdea*` aliases/wrappers after consumer migration completion.
+### `PublishingPlan -> PublishingPackage`
+- **Compatibility strategy:** preserve underlying persisted structure while introducing `PublishingPackage` naming at domain and API edges.
+- **Endpoint compatibility:** existing `/publishing-plans` routes may remain temporarily; add equivalent package-named aliases before eventual route consolidation.
+- **Contract compatibility:** shared OpenAPI/TypeScript should expose preferred package names and document legacy plan fields/routes as deprecated.
+
+### `AnalyticsSnapshot -> AnalyticsReport`
+- **Compatibility strategy:** treat “snapshot” as persistence/ingestion detail and “report” as canonical domain/API view.
+- **Service compatibility:** analytics ingestion jobs may continue writing snapshot-oriented records while API serializers expose report-oriented shapes.
+- **Contract compatibility:** provide transitional aliases in generated types to avoid frontend breakage while reporting modules migrate.
+
+### `ApprovalDecision -> Approval` aggregate model
+- **Compatibility strategy:** promote approval lifecycle to aggregate root (`Approval`) while retaining existing decision rows as historical decision events.
+- **Data migration:** backfill aggregate instances from existing `ApprovalDecision` history grouped by project/workflow context.
+- **API compatibility:** keep existing decision action endpoints functional as thin adapters that append decisions/events to the new aggregate model until clients fully migrate.
