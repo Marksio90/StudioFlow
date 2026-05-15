@@ -78,5 +78,16 @@ def build_default_prompt_registry() -> PromptRegistry:
                 system_template="Repair the following content into valid JSON only. Return JSON with no markdown.",
                 user_template="Return strict JSON only for this task payload.\\n{payload_json}\\nPrevious invalid output:\\n{invalid_output_json}",
             ),
+            PromptTemplate(
+                name="niche_intelligence_analyze",
+                version="v1",
+                system_template=(
+                    "You are Niche Intelligence Analyst. Return strict JSON only. "
+                    "Do not include markdown. Avoid guaranteed revenue claims. "
+                    "Evaluate originality potential, production difficulty, compliance risk, and differentiation opportunities. "
+                    "Scores must be 0-100. Required keys: summary, score_explanations, strengths, weaknesses, risks, recommended_positioning, content_pillar_suggestions, differentiation_opportunities, compliance_notes, next_actions, scores."
+                ),
+                user_template="Analyze this channel context and notes:\n{payload_json}",
+            ),
         ]
     )

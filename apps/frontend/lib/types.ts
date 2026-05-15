@@ -131,3 +131,12 @@ export interface ChannelMemory {
 }
 
 export type ChannelMemoryInput = Omit<ChannelMemory, 'channelId'>;
+
+
+export interface NicheScores {
+  demandScore: number; competitionScore: number; originalityPotential: number; productionDifficulty: number; monetizationPotential: number; complianceRisk: number; longTermDepth: number; overallScore: number;
+}
+
+export interface NicheReport {
+  id: string; channelId: string; summary: string; scoreExplanations: Record<string,string>; strengths: string[]; weaknesses: string[]; risks: string[]; recommendedPositioning: string; contentPillarSuggestions: string[]; differentiationOpportunities: string[]; complianceNotes: string[]; nextActions: string[]; scores: NicheScores; createdAt: string;
+}

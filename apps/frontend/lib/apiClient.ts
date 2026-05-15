@@ -1,4 +1,4 @@
-import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
+import { AnalyticsSnapshot, Channel, ChannelMemory, ChannelMemoryInput, ContentIdea, ContentIdeaStatus, CreateChannelInput, CreateContentIdeaInput, CreateProjectInput, NicheReport, ProjectStatus, UpdateChannelInput, UpdateContentIdeaInput, VideoProject } from './types';
 import type { components, operations } from '../../../packages/shared/src/backend-api';
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -65,6 +65,9 @@ type ApiAdapter = {
     channels: '/api/v1/channels';
     channelById: (id: string) => `/api/v1/channels/${string}`;
     channelMemory: (id: string) => `/api/v1/channels/${string}/memory`;
+    nicheAnalyze: (id: string) => `/api/v1/channels/${string}/niche/analyze`;
+    nicheReports: (id: string) => `/api/v1/channels/${string}/niche/reports`;
+    nicheReportById: (id: string, reportId: string) => `/api/v1/channels/${string}/niche/reports/${string}`;
     ideas: '/api/v1/content-ideas';
     ideaById: (id: string) => `/api/v1/content-ideas/${string}`;
     ideaStatus: (id: string) => `/api/v1/content-ideas/${string}/status`;
@@ -85,7 +88,7 @@ type ApiAdapter = {
 export const backendApiAdapter: ApiAdapter = {
   paths: {
     projects: '/api/v1/video-projects', projectById: (id) => `/api/v1/video-projects/${id}`, projectAnalytics: (id) => `/api/v1/video-projects/${id}/analytics`, projectApprove: (id) => `/api/v1/video-projects/${id}/approve`, projectReject: (id) => `/api/v1/video-projects/${id}/reject`,
-    channels: '/api/v1/channels', channelById: (id) => `/api/v1/channels/${id}`, channelMemory: (id) => `/api/v1/channels/${id}/memory`,
+    channels: '/api/v1/channels', channelById: (id) => `/api/v1/channels/${id}`, channelMemory: (id) => `/api/v1/channels/${id}/memory`, nicheAnalyze: (id) => `/api/v1/channels/${id}/niche/analyze`, nicheReports: (id) => `/api/v1/channels/${id}/niche/reports`, nicheReportById: (id, reportId) => `/api/v1/channels/${id}/niche/reports/${reportId}`,
     ideas: '/api/v1/content-ideas', ideaById: (id) => `/api/v1/content-ideas/${id}`, ideaStatus: (id) => `/api/v1/content-ideas/${id}/status`
   },
   toListProjectsQuery: (filters) => ({ status: filters?.status, channel_id: filters?.channel }),
@@ -193,6 +196,8 @@ export const apiClient = { buildApiUrl,
   async deleteChannel(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) { await apiRequest<void>(backendApiAdapter.paths.channelById(id), { method: 'DELETE', onLoadingChange: options?.onLoadingChange }); },
   async getChannelMemory(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapChannelMemory(await apiRequest<BackendChannelMemoryOut>(backendApiAdapter.paths.channelMemory(id), { onLoadingChange: options?.onLoadingChange })); },
   async updateChannelMemory(id: string, input: ChannelMemoryInput, options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapChannelMemory(await apiRequest<BackendChannelMemoryOut>(backendApiAdapter.paths.channelMemory(id), { method: 'PATCH', body: backendApiAdapter.toChannelMemoryBody(input), onLoadingChange: options?.onLoadingChange })); },
+  async runNicheAnalysis(id: string, notes = '', options?: { onLoadingChange?: (isLoading: boolean) => void }) { return mapNicheReport(await apiRequest<any>(backendApiAdapter.paths.nicheAnalyze(id), { method: 'POST', body: { notes }, onLoadingChange: options?.onLoadingChange })); },
+  async listNicheReports(id: string, options?: { onLoadingChange?: (isLoading: boolean) => void }) { const response = await apiRequest<{ items: any[] }>(backendApiAdapter.paths.nicheReports(id), { onLoadingChange: options?.onLoadingChange }); return response.items.map(mapNicheReport); },
 
   async listIdeas(filters?: { status?: ContentIdeaStatus; contentPillar?: string; query?: string; onLoadingChange?: (isLoading: boolean) => void }) {
     const response = await apiRequest<{ items: BackendContentIdea[] }>(backendApiAdapter.paths.ideas, { query: backendApiAdapter.toListIdeasQuery(filters), onLoadingChange: filters?.onLoadingChange });
@@ -211,3 +216,6 @@ export const apiClient = { buildApiUrl,
     return mapIdeaDto(await apiRequest<BackendContentIdea>(backendApiAdapter.paths.ideaStatus(id), { method: 'PATCH', body: { status }, onLoadingChange: options?.onLoadingChange }));
   },
 };
+
+
+const mapNicheReport = (dto: any): NicheReport => ({ id: dto.id, channelId: dto.channel_id, summary: dto.summary, scoreExplanations: dto.score_explanations ?? {}, strengths: dto.strengths ?? [], weaknesses: dto.weaknesses ?? [], risks: dto.risks ?? [], recommendedPositioning: dto.recommended_positioning ?? "", contentPillarSuggestions: dto.content_pillar_suggestions ?? [], differentiationOpportunities: dto.differentiation_opportunities ?? [], complianceNotes: dto.compliance_notes ?? [], nextActions: dto.next_actions ?? [], scores: { demandScore: dto.scores?.demand_score ?? 0, competitionScore: dto.scores?.competition_score ?? 0, originalityPotential: dto.scores?.originality_potential ?? 0, productionDifficulty: dto.scores?.production_difficulty ?? 0, monetizationPotential: dto.scores?.monetization_potential ?? 0, complianceRisk: dto.scores?.compliance_risk ?? 0, longTermDepth: dto.scores?.long_term_depth ?? 0, overallScore: dto.scores?.overall_score ?? 0 }, createdAt: dto.created_at });
